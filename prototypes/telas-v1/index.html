@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTÓTIPO · Telas do v1</title>
+<!--
+  PROTOTYPE, throwaway. Do not build on this code.
+  Question (issue #5, "Como devem ser as telas do v1?"): which navigation and visual style should the v1 screens have?
+  Plan: three radically different variants of the whole v1 app on one page, switchable via ?variant=A|B|C
+  and the floating bottom bar (keys ← →). All state is in memory; reload resets it.
+  Sample data is invented in the shape of the author's spreadsheet. No value is real.
+  Run: open this file in a browser (double-click).
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;background:#dcdad4;color:#1c1c1e;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:inherit}
+button:disabled{opacity:.3;cursor:default}
+
+/* ---------- stage (not part of the design) ---------- */
+.stage{min-height:100vh;display:flex;gap:40px;align-items:center;justify-content:center;padding:28px 24px 100px}
+.phone{width:390px;height:800px;border-radius:48px;border:12px solid #121212;background:#000;position:relative;overflow:hidden;box-shadow:0 40px 80px -30px rgba(0,0,0,.45);flex:none}
+#app{position:absolute;inset:0;overflow:hidden}
+#app>div{height:100%}
+#app *{scrollbar-width:none}
+#app *::-webkit-scrollbar{display:none}
+.notes{width:340px;font-size:14px;line-height:1.55;color:#33322f;max-height:800px;overflow:auto}
+.notes .n-tag{display:inline-block;background:#ffcc00;color:#111;font-weight:700;font-size:11px;letter-spacing:.06em;padding:3px 8px;border-radius:6px}
+.notes h1{font-size:22px;margin:10px 0 2px}
+.notes h2{font-size:17px;margin:14px 0 4px}
+.notes h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#77736b;margin:16px 0 4px}
+.notes ul{padding-left:18px}
+.notes li{margin:3px 0}
+.notes .state{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:#f3f1ec;border-radius:8px;padding:8px 10px;white-space:pre-wrap}
+.notes .fine{font-size:12px;color:#77736b;margin-top:12px}
+.switcher{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;background:#111;color:#fff;border-radius:999px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.35);z-index:1000;font-size:14px;outline:2px dashed #ffcc00;outline-offset:3px}
+.switcher button{width:38px;height:38px;border-radius:50%;color:#fff;font-size:18px;text-align:center}
+.switcher button:hover{background:#333}
+.switcher .lbl{padding:0 10px;min-width:190px;text-align:center;font-weight:600;white-space:nowrap}
+@media (max-width:820px){.notes{display:none}}
+@media (max-width:520px){.stage{padding:0;display:block}.phone{width:100vw;height:100vh;height:100dvh;border:0;border-radius:0}.switcher{top:8px;bottom:auto;font-size:12px}.switcher .lbl{min-width:140px}.switcher button{width:30px;height:30px}}
+
+/* ---------- shared bits ---------- */
+.amt{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.pos{color:#12935a}.neg{color:#d93a3a}
+.muted{opacity:.45}
+.tag{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:6px;background:rgba(127,127,127,.16);margin-left:6px;vertical-align:1px;white-space:nowrap}
+.toast{position:absolute;left:14px;right:14px;bottom:92px;background:#16181d;color:#fff;border-radius:12px;padding:11px 14px;font-size:13px;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.rtog{display:flex;gap:10px;align-items:center;width:100%;padding:10px 12px;border-radius:12px;margin:10px 0 4px;font-size:13px;background:var(--rt-bg,#f2f3f6);text-align:left}
+.rtog .sw{width:36px;height:21px;border-radius:11px;background:#c3c7cf;position:relative;flex:none;transition:.15s}
+.rtog .sw::after{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:.15s}
+.rtog.on .sw{background:var(--rt-on,#2457e6)}
+.rtog.on .sw::after{left:17px}
+.rtog small{display:block;opacity:.65;font-size:11.5px}
+.rule{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(127,127,127,.18);font-size:14px}
+.rule span{flex:1}.rule small{display:block;opacity:.6;font-size:12px}
+.rule button{width:30px;height:30px;border-radius:50%;background:rgba(127,127,127,.15);text-align:center}
+.note{font-size:13px;opacity:.75;line-height:1.45;margin:8px 0}
+.empty-state{text-align:center;padding:36px 20px;line-height:1.45}
+.empty-state .ic{font-size:40px;margin-bottom:8px}
+.empty-state p{font-size:13px;opacity:.7;margin-top:6px}
+.linkbtn{display:block;margin:14px auto;font-size:13px;text-decoration:underline;opacity:.75}
+
+/* ---------- Variant A: tabs ---------- */
+.va{background:#f5f6f8;color:#16181d;display:flex;flex-direction:column;position:relative}
+.va-head{padding:20px 20px 8px}
+.va-top{display:flex;justify-content:space-between;align-items:center}
+.va-title{font-size:28px;font-weight:750;letter-spacing:-.02em}
+.va-hbtn{font-size:13px;font-weight:600;color:#2457e6;padding:6px 10px;border-radius:8px;background:#e8eefc}
+.mnav{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:15px;color:#4b5160}
+.mnav button{width:28px;height:28px;border-radius:8px;background:#e5e7ec;font-size:16px;text-align:center}
+.mnav em{font-style:normal;font-size:11px;font-weight:600;color:#b4690e;background:#fdf0dc;padding:1px 6px;border-radius:6px;margin-left:4px}
+.va-main{flex:1;overflow-y:auto;padding:6px 16px 20px}
+.va-tabs{display:flex;border-top:1px solid #e1e3e8;background:#fff;padding:6px 2px 18px}
+.va-tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;color:#8a909c;padding:4px 0;text-align:center}
+.va-tabs button .ic{font-size:20px;line-height:1;filter:grayscale(1);opacity:.55}
+.va-tabs button.on{color:#2457e6;font-weight:600}
+.va-tabs button.on .ic{filter:none;opacity:1}
+.va-card{background:#fff;border-radius:16px;padding:12px 16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+.va-card.center{display:flex;justify-content:center;padding:18px}
+.va-ch{font-size:13px;font-weight:600;color:#6b7280;margin-bottom:8px}
+.va-legend{display:flex;gap:14px;font-size:12px;color:#6b7280;margin-top:4px}
+.va-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+.va-kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.va-kpi{background:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+.va-kpi .k{font-size:12px;color:#6b7280}
+.va-kpi .v{font-size:19px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.va-kpi .v.blue{color:#2457e6}
+.va-h{font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:14px 4px 8px}
+.va-banner{background:#fdf0dc;color:#8a4f08;font-size:13px;border-radius:12px;padding:8px 12px;margin-bottom:12px}
+.va .seg{display:flex;background:#e5e7ec;border-radius:10px;padding:3px;margin-bottom:12px}
+.va .seg button{flex:1;padding:7px;border-radius:8px;font-size:13px;font-weight:600;color:#5b616e;text-align:center}
+.va .seg button.on{background:#fff;color:#16181d;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.va .chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
+.va .chip{flex:none;padding:6px 12px;border-radius:999px;background:#fff;border:1px solid #e1e3e8;font-size:13px;color:#3f4450}
+.va .chip.on{background:#16181d;color:#fff;border-color:#16181d}
+.va-filter{display:inline-block;font-size:13px;font-weight:600;background:#e8eefc;color:#2457e6;padding:5px 10px;border-radius:8px;margin-bottom:10px}
+.va-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f0f1f4;width:100%;text-align:left}
+.va-row:last-child{border-bottom:0}
+.va-ico{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:17px;flex:none}
+.va-row .t{flex:1;min-width:0;display:flex;flex-direction:column}
+.va-row .d{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.va-row .s{font-size:12px;color:#8a909c;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.va-row .s em{font-style:normal;color:#b4690e;font-weight:600}
+.va-row .r{display:flex;flex-direction:column;align-items:flex-end}
+.va-row .bar{height:5px;border-radius:3px;background:#f0f1f4;margin-top:6px;overflow:hidden}
+.va-row .bar i{display:block;height:100%;border-radius:3px}
+.va-row .chev{color:#c3c7cf;font-size:18px}
+.va-day{font-size:12px;font-weight:600;color:#8a909c;margin:12px 4px 6px}
+.va-list{padding-top:2px;padding-bottom:2px}
+.va-big{font-size:30px;font-weight:750;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.va-sub{font-size:13px;color:#6b7280;margin:6px 2px}
+.va-note{font-size:11.5px;color:#8a909c;margin-top:8px;line-height:1.4}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.stackbar{display:flex;height:14px;border-radius:7px;overflow:hidden;gap:2px;margin:6px 0 8px}
+.stackbar i{display:block;height:100%}
+.va-sublist{background:#f7f8fa;border-radius:10px;padding:6px 12px;margin:0 0 8px;font-size:13px}
+.va-sublist div{display:flex;justify-content:space-between;padding:4px 0;color:#4b5160}
+.va-ben{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px}
+.va-ben .v{font-size:15px}
+.sheet-bg{position:absolute;inset:0;background:rgba(10,12,16,.38);z-index:40;display:flex;align-items:flex-end}
+.sheet{background:#fff;width:100%;border-radius:22px 22px 0 0;padding:10px 18px 26px;max-height:88%;overflow:auto;cursor:default}
+.grab{width:40px;height:5px;border-radius:3px;background:#d6d9df;margin:0 auto 14px}
+.sh-title{font-size:18px;font-weight:700;margin-bottom:6px}
+.sh-d{font-size:18px;font-weight:700}
+.sh-amt{font-size:26px;font-weight:750;margin:2px 0;font-variant-numeric:tabular-nums}
+.sh-s{font-size:13px;color:#8a909c}
+.sh-lbl{font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-top:14px}
+.catgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 0}
+.catbtn{border:1.5px solid #e1e3e8;border-radius:12px;padding:10px 4px;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center}
+.catbtn span{font-size:20px}
+.catbtn.on{border-color:#2457e6;background:#eef3ff;font-weight:600}
+
+/* ---------- Variant B: single dashboard ---------- */
+.vb{background:#0e1116;color:#e8eaed;display:flex;flex-direction:column;position:relative;--rt-bg:#1a1f27;--rt-on:#7aa2ff}
+.vb-top{padding:18px 16px 6px}
+.vb-upd{font-size:11.5px;color:#6b7480;margin:0 2px 8px}
+.vb-pills{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.vb-pill{flex:none;padding:6px 13px;border-radius:999px;background:#1a1f27;color:#9aa3af;font-size:13px}
+.vb-pill.on{background:#e8eaed;color:#0e1116;font-weight:700}
+.vb-main{flex:1;overflow-y:auto;padding:0 16px 28px}
+.vb-hero{padding:16px 2px 6px}
+.vb-hero .k{font-size:13px;color:#9aa3af}
+.vb-hero .v{font-size:42px;font-weight:750;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.1}
+.vb-hero .s{font-size:13px;color:#9aa3af;margin-top:4px}
+.vb .pos{color:#3dd68c}.vb .neg{color:#ff6b6b}
+.flowbar{display:flex;height:12px;border-radius:6px;overflow:hidden;background:#1a1f27;margin:14px 0 8px;gap:2px}
+.flowbar i{display:block;height:100%}
+.vb-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:#9aa3af;margin-bottom:14px}
+.vb-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+.vb-legend b{color:#e8eaed;font-weight:600}
+.vb-sec{display:block;width:100%;border-top:1px solid #1f252e;padding:14px 0}
+.vb-sec-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.vb-sec-h b{font-size:15px}
+.vb-more{color:#7aa2ff;font-size:13px}
+.hbar{display:grid;grid-template-columns:22px 1fr 84px;align-items:center;gap:8px;font-size:13px;padding:5px 0;width:100%;text-align:left}
+.hbar .lab{display:flex;flex-direction:column;gap:5px}
+.hbar .track{height:7px;border-radius:4px;background:#1a1f27;overflow:hidden}
+.hbar .fill{height:100%;border-radius:4px}
+.hbar .amt{text-align:right}
+.vb-weeks{display:flex;gap:8px;align-items:flex-end;height:120px}
+.vb-wk{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;text-align:center}
+.vb-wk .val{font-size:10.5px;color:#9aa3af}
+.vb-wk .col{flex:1;width:100%;display:flex;align-items:flex-end;background:#151a21;border-radius:6px;overflow:hidden}
+.vb-wk .col i{display:block;width:100%;background:#7aa2ff;border-radius:6px}
+.vb-wk .lb{font-size:10.5px;color:#6b7480}
+.vb-acc{display:flex;align-items:center;gap:10px;padding:9px 0;width:100%;text-align:left}
+.vb-acc .t{flex:1}.vb-acc .s{font-size:12px;color:#6b7480}
+.vb-acc .r{text-align:right}.vb-acc .r .s{font-size:11px}
+.vb-pat{display:flex;align-items:center;gap:12px;width:100%;text-align:left}
+.vb-pat .t{flex:1}
+.vb-pat .big{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.vb-page-h{display:flex;align-items:center;gap:10px;padding:16px 12px 10px}
+.vb-page-h b{font-size:17px}
+.vb-back{width:36px;height:36px;border-radius:50%;background:#1a1f27;font-size:20px;text-align:center}
+.vb-sub{font-size:12.5px;color:#9aa3af;margin:0 2px 8px}
+.vb-day{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b7480;margin:14px 0 2px}
+.vb-tx{display:flex;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid #161b22;width:100%;text-align:left}
+.vb-tx .ic{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:15px;flex:none}
+.vb-tx .t{flex:1;min-width:0;display:flex;flex-direction:column}
+.vb-tx .d{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-tx .s{font-size:11.5px;color:#6b7480;margin-top:1px}
+.vb-tx .s em{font-style:normal;color:#f0b35a}
+.vb-txhero{text-align:center;padding:10px 10px 18px}
+.vb-txhero .ic{width:60px;height:60px;border-radius:50%;display:grid;place-items:center;font-size:28px;margin:0 auto 10px}
+.vb-txhero .big{font-size:34px;font-weight:750}
+.vb-txhero .d{font-size:17px;font-weight:600;margin-top:4px}
+.vb-txhero .s{font-size:13px;color:#9aa3af;margin-top:2px}
+.vb-h{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b7480;margin:16px 0 6px}
+.vb-h small{text-transform:none;letter-spacing:0;font-weight:500;color:#f0b35a;margin-left:6px}
+.vb-catrow{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid #161b22;width:100%;text-align:left;font-size:15px}
+.vb-catrow .t{flex:1}.vb-catrow .ck{color:#7aa2ff;font-weight:700}
+.vb-catrow.on{color:#7aa2ff}
+.vb-box{background:#151a21;border-radius:16px;padding:14px;margin:6px 0 12px}
+.vb-cls{padding:8px 0;border-bottom:1px solid #1f252e}
+.vb-cls:last-child{border-bottom:0}
+.vb-cls .top{display:flex;justify-content:space-between;font-size:14px;font-weight:600}
+.vb-cls .it{display:flex;justify-content:space-between;font-size:12.5px;color:#9aa3af;padding:3px 0 0 18px}
+.vb .tag{background:#222935;color:#c4cad3}
+.vb .toast{background:#e8eaed;color:#0e1116;bottom:24px}
+
+/* ---------- Variant C: wallet ---------- */
+.vc{background:#fbfaf7;color:#1d1b18;display:flex;flex-direction:column;position:relative;--rt-bg:#f1eee7;--rt-on:#d65c33}
+.vc-head{padding:18px 18px 4px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.vc-hi{font-size:26px;font-weight:750;letter-spacing:-.02em;font-family:Georgia,"Times New Roman",serif}
+.vc-upd{font-size:11.5px;color:#9a9388}
+.vc-mctl{display:flex;align-items:center;gap:4px;background:#f1eee7;border-radius:999px;padding:3px;font-size:13px;font-weight:600}
+.vc-mctl button{width:26px;height:26px;border-radius:50%;text-align:center}
+.vc-mctl button:not(:disabled):hover{background:#e6e1d6}
+.vc-mctl span{padding:0 4px;white-space:nowrap}
+.vc-strip{margin:10px 16px 4px;padding:12px 12px;border-radius:18px;background:#f1eee7;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.vc-strip .k{font-size:10.5px;color:#7b756b;text-transform:uppercase;letter-spacing:.05em}
+.vc-strip .v{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.vc-main{flex:1;overflow-y:auto;padding:12px 16px 100px}
+.wcard{border-radius:20px;color:#fff;padding:14px 18px;height:124px;position:relative;box-shadow:0 -6px 18px -10px rgba(0,0,0,.45);margin-bottom:-62px;display:flex;flex-direction:column;justify-content:flex-start;width:100%;text-align:left;overflow:hidden}
+.wcard:last-child{margin-bottom:0}
+.wcard .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.wcard .n{font-size:14px;font-weight:600;opacity:.92}
+.wcard .b{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.wcard .m{font-size:11.5px;opacity:.8;margin-top:3px}
+.wcard .chipmark{position:absolute;right:18px;bottom:14px;width:34px;height:24px;border-radius:5px;background:rgba(255,255,255,.25)}
+.wcard .lbl2{position:absolute;left:18px;bottom:14px;font-size:11px;opacity:.7;letter-spacing:.12em}
+.wcard.solo{margin:4px 0 14px;height:132px}
+.vc-fab{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);background:#1d1b18;color:#fbfaf7;border-radius:999px;padding:13px 24px;font-weight:700;font-size:15px;box-shadow:0 12px 24px -8px rgba(0,0,0,.5);white-space:nowrap;z-index:5}
+.vc-back{font-size:15px;font-weight:600;padding:6px 4px}
+.vc-hbtn{font-size:12.5px;font-weight:600;padding:6px 10px;border-radius:999px;background:#f1eee7}
+.vc-day{font-size:12px;font-weight:600;color:#9a9388;margin:14px 2px 4px;font-family:Georgia,serif;font-style:italic}
+.vc-tx{display:flex;gap:10px;align-items:flex-start;padding:10px 2px;border-bottom:1px solid #eee9df}
+.vc-tx .l{flex:1;min-width:0}
+.vc-tx .d{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vc-tx .s{margin-top:5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;font-size:11.5px;color:#9a9388}
+.vc-tx .s em{font-style:normal;color:#d65c33;font-weight:600}
+.cchip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--c) 14%,#fff);color:color-mix(in srgb,var(--c) 70%,#1d1b18);border:1px solid color-mix(in srgb,var(--c) 30%,#fff)}
+.cchip.open{outline:2px solid #1d1b18}
+.cchip.flat{background:#f1eee7;color:#7b756b;border-color:#e6e1d6}
+.cchip.on{background:var(--c);color:#fff}
+.vc-pop{background:#f1eee7;border-radius:14px;padding:10px 12px 12px;margin:2px 0 8px}
+.vc-pop .h{font-size:12px;font-weight:700;color:#7b756b;margin-bottom:6px}
+.vc-pop .chs{display:flex;flex-wrap:wrap;gap:6px}
+.vc-pop .rtog{background:#fbfaf7;margin:0 0 10px}
+.vc-an{position:absolute;inset:0;z-index:30;background:rgba(29,27,24,.35);display:flex;flex-direction:column;justify-content:flex-end}
+.vc-an-in{background:#fbfaf7;border-radius:26px 26px 0 0;height:92%;display:flex;flex-direction:column;cursor:default}
+.vc-an-h{display:flex;justify-content:space-between;align-items:center;padding:18px 18px 8px}
+.vc-an-h b{font-size:20px;font-family:Georgia,serif}
+.vc-an-h .x{width:34px;height:34px;border-radius:50%;background:#f1eee7;text-align:center;font-size:15px}
+.vc .seg{display:flex;gap:6px;padding:4px 16px 10px}
+.vc .seg button{flex:1;padding:8px;border-radius:999px;font-size:13px;font-weight:600;background:#f1eee7;color:#7b756b;text-align:center}
+.vc .seg button.on{background:#1d1b18;color:#fbfaf7}
+.vc-an-body{flex:1;overflow-y:auto;padding:4px 16px 24px}
+.vc-meas{display:grid;grid-template-columns:76px 1fr 96px;gap:10px;align-items:center;padding:7px 0;font-size:14px}
+.vc-meas .track{height:10px;background:#f1eee7;border-radius:5px;overflow:hidden}
+.vc-meas .track i{display:block;height:100%;border-radius:5px}
+.vc-meas .amt{text-align:right}
+.vc-cap{font-size:12px;color:#9a9388;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.waffle{display:grid;grid-template-columns:repeat(20,1fr);gap:3px;margin:6px 0 12px}
+.waffle i{display:block;aspect-ratio:1;border-radius:3px}
+.vc-catrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #eee9df;width:100%;text-align:left;font-size:14px}
+.vc-catrow .t{flex:1}.vc-catrow small{color:#9a9388;margin-left:4px}
+.vc-mini{background:#f1eee7;border-radius:12px;padding:4px 12px;margin:4px 0 8px}
+.vc-mini div{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #e6e1d6}
+.vc-mini div:last-child{border-bottom:0}
+.cal{display:grid;grid-template-columns:repeat(7,1fr) 64px;gap:4px;margin-top:4px}
+.cal .hd{font-size:10.5px;color:#9a9388;text-align:center;font-weight:700}
+.cal .d{aspect-ratio:1;border-radius:8px;font-size:12px;font-weight:600;display:grid;place-items:center;text-align:center}
+.cal .d.on{outline:2px solid #1d1b18}
+.cal .d.fut{background:transparent!important;color:#cfc8bb!important;border:1px dashed #e6e1d6}
+.cal .wt{font-size:11px;font-weight:700;display:grid;place-items:center end;font-variant-numeric:tabular-nums}
+.vc-ben{display:flex;gap:8px;margin-bottom:8px}
+.vc-ben div{flex:1;background:#f1eee7;border-radius:14px;padding:10px 12px}
+.vc-ben .k{font-size:12px;color:#7b756b}.vc-ben .v{font-weight:700;font-size:15px}
+.vc .toast{bottom:90px}
+.vc-cls{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;border-bottom:1px solid #eee9df}
+.vc-cls .t{flex:1}
+.vc-it{display:flex;justify-content:space-between;font-size:12.5px;color:#7b756b;padding:3px 0 3px 20px}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="phone"><div id="app"></div></div>
+  <aside class="notes" id="notes"></aside>
+</div>
+<div class="switcher" role="toolbar" aria-label="Trocar variante do protótipo">
+  <button data-act="variant-prev" aria-label="Variante anterior">←</button>
+  <span class="lbl" id="sw-label"></span>
+  <button data-act="variant-next" aria-label="Próxima variante">→</button>
+</div>
+
+<script>
+'use strict';
+// ============================================================
+// Formatting helpers
+// ============================================================
+const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const BRL0 = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const fmt = v => BRL.format(v);
+const fmt0 = v => BRL0.format(v);
+const signed = v => (v > 0 ? '+' : v < 0 ? '−' : '') + BRL.format(Math.abs(v));
+const fmtK = v => { const a = Math.abs(v), s = v < 0 ? '−' : ''; return a >= 1000 ? `${s}R$ ${(a / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : `${s}R$ ${Math.round(a)}`; };
+const pct = v => (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: v < 0.1 ? 1 : 0 }) + '%';
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const J = o => esc(JSON.stringify(o));
+const MS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const MF = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const WD = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const cap = s => s[0].toUpperCase() + s.slice(1);
+const dayLabel = d => `${cap(WD[d.getDay()])}, ${d.getDate()} ${MS[d.getMonth()]}`;
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ============================================================
+// Invented sample data (shape of the author's spreadsheet; no real values)
+// ============================================================
+const TODAY = new Date(2026, 10, 8);
+const MONTHS = [5, 6, 7, 8, 9, 10].map(m => ({ y: 2026, m, key: '2026-' + String(m + 1).padStart(2, '0'), label: cap(MF[m]) + ' 2026', short: cap(MS[m]), partial: m === TODAY.getMonth() }));
+const monthOf = k => MONTHS.find(x => x.key === k);
+
+const ACC = {
+  'btg-conta': { name: 'BTG Conta', short: 'BTG', color: '#0f2c5c', balance: 1842.37 },
+  'btg-cartao': { name: 'BTG Cartão', short: 'Cartão', color: '#2a5bb8' },
+  'nubank': { name: 'Nubank', short: 'Nu', color: '#7a1fc9', balance: 118.40 },
+  'mercado-pago': { name: 'Mercado Pago', short: 'MP', color: '#0098d4', balance: 2310.55 },
+};
+const ACC_ORDER = ['btg-conta', 'btg-cartao', 'nubank', 'mercado-pago'];
+
+const CATS = {
+  transporte: { label: 'Transporte', icon: '🚌', color: '#2f80ed' },
+  alimentacao: { label: 'Alimentação', icon: '🍽️', color: '#f2994a' },
+  mercado: { label: 'Mercado', icon: '🛒', color: '#27ae60' },
+  compras: { label: 'Compras', icon: '🛍️', color: '#eb5757' },
+  lazer: { label: 'Lazer e games', icon: '🎮', color: '#9b51e0' },
+  assinaturas: { label: 'Assinaturas', icon: '📺', color: '#2bb3c0' },
+  saude: { label: 'Saúde', icon: '💊', color: '#e0559a' },
+  contas: { label: 'Contas fixas', icon: '🧾', color: '#7d8590' },
+  viagem: { label: 'Viagem', icon: '✈️', color: '#d4a106' },
+  outros: { label: 'Outros', icon: '📦', color: '#a3a3a3' },
+};
+const INCOME_LABEL = { salario: 'Salário', outras: 'Outras receitas', rendimentos: 'Rendimentos' };
+const KIND_VIS = {
+  receita: { icon: '💰', color: '#12935a' },
+  aporte: { icon: '📈', color: '#2457e6', label: 'Aporte' },
+  propria: { icon: '⇄', color: '#8a909c', label: 'Entre suas contas' },
+  fatura: { icon: '💳', color: '#8a909c', label: 'Pagamento de fatura' },
+  reembolso: { icon: '↩️', color: '#12935a', label: 'Reembolso' },
+};
+
+const SPEND = [
+  { d: 'Uber', cat: 'transporte', acc: 'btg-cartao', min: 9, max: 34, n: [14, 22] },
+  { d: '99 Pop', cat: 'transporte', acc: 'btg-cartao', min: 8, max: 26, n: [2, 5] },
+  { d: 'Metrô', cat: 'transporte', acc: 'btg-cartao', fixed: 7.9, n: [6, 10] },
+  { d: 'iFood', cat: 'alimentacao', acc: 'btg-cartao', min: 28, max: 78, n: [5, 9] },
+  { d: 'Restaurante Bom Sabor', cat: 'alimentacao', acc: 'btg-cartao', min: 45, max: 130, n: [2, 4] },
+  { d: 'Padaria Pão Quente', cat: 'alimentacao', acc: 'btg-cartao', min: 8, max: 29, n: [2, 5] },
+  { d: 'Pix QR · Lanchonete', cat: 'alimentacao', acc: 'mercado-pago', min: 12, max: 38, n: [1, 3] },
+  { d: 'Supermercado Bom Preço', cat: 'mercado', acc: 'btg-cartao', min: 55, max: 210, n: [2, 4] },
+  { d: 'Netflix', cat: 'assinaturas', acc: 'btg-cartao', fixed: 44.9, day: 7 },
+  { d: 'Spotify', cat: 'assinaturas', acc: 'btg-cartao', fixed: 21.9, day: 3 },
+  { d: 'YouTube Premium', cat: 'assinaturas', acc: 'btg-cartao', fixed: 24.9, day: 11 },
+  { d: 'Steam', cat: 'lazer', acc: 'btg-cartao', min: 20, max: 150, n: [1, 3] },
+  { d: 'Cinema Estação', cat: 'lazer', acc: 'btg-cartao', min: 28, max: 64, n: [0, 2] },
+  { d: 'Loja Estilo', cat: 'compras', acc: 'btg-cartao', min: 90, max: 340, n: [1, 2] },
+  { d: 'Amazon', cat: 'compras', acc: 'btg-cartao', min: 35, max: 260, n: [1, 3] },
+  { d: 'Drogaria Saúde', cat: 'saude', acc: 'btg-cartao', min: 18, max: 95, n: [0, 2] },
+  { d: 'Academia Movimento', cat: 'saude', acc: 'btg-cartao', fixed: 119.9, day: 5 },
+  { d: 'Operadora de celular', cat: 'contas', acc: 'btg-conta', fixed: 59.9, day: 28 },
+  { d: 'Hospedagem de site', cat: 'outros', acc: 'mercado-pago', fixed: 18.9, day: 10 },
+  { d: 'Pix · Bilhete Único', cat: 'transporte', acc: 'nubank', fixed: 40, n: [0, 1] },
+];
+const EXTRAS = {
+  5: { aporte: 3520, items: [[22, 'Pix recebido · Freela de design', 'receita', 'outras', 'nubank', 1800]] },
+  6: { aporte: 2150, items: [] },
+  7: { aporte: 17900, items: [[20, 'PLR', 'receita', 'salario', 'btg-conta', 19600], [23, 'Show · ingresso', 'gasto', 'lazer', 'btg-cartao', -380]] },
+  8: { aporte: 3950, items: [[9, 'Passagem aérea', 'gasto', 'viagem', 'btg-cartao', -2380], [11, 'Hotel Beira-Mar', 'gasto', 'viagem', 'btg-cartao', -640]] },
+  9: { aporte: 2600, items: [[18, 'Pix recebido · venda de monitor', 'receita', 'outras', 'mercado-pago', 450]] },
+  10: { aporte: 0, items: [] },
+};
+
+function genMonth(mo) {
+  const { y, m } = mo, rnd = mulberry32(97 * (m + 3)), last = new Date(y, m + 1, 0).getDate();
+  const cutoff = mo.partial ? TODAY.getDate() : last;
+  const out = []; let seq = 0;
+  const rint = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+  const ramt = (a, b) => Math.round((a + rnd() * (b - a)) * 100) / 100;
+  const push = (day, o) => { const s = seq++; if (day > cutoff) return; out.push({ id: mo.key + '-' + s, seq: s, mk: mo.key, date: new Date(y, m, day), ...o }); };
+  for (const t of SPEND) {
+    const n = t.n ? rint(t.n[0], t.n[1]) : 1;
+    for (let i = 0; i < n; i++) { const day = t.day || rint(1, last); const amt = t.fixed || ramt(t.min, t.max); push(day, { desc: t.d, amount: -amt, acc: t.acc, kind: 'gasto', cat: t.cat }); }
+  }
+  const k = m - 3;
+  push(12, { desc: `Tênis esportivo (${k}/10)`, amount: -99.99, acc: 'btg-cartao', kind: 'gasto', cat: 'compras', parcela: `${k}/10` });
+  push(15, { desc: 'Salário (1ª parte)', amount: 2284.5, acc: 'btg-conta', kind: 'receita', cat: 'salario' });
+  push(Math.min(30, last), { desc: 'Salário (2ª parte)', amount: 2061.2, acc: 'btg-conta', kind: 'receita', cat: 'salario' });
+  const rend = ramt(5, 9); push(last, { desc: 'Rendimentos do mês', amount: rend, acc: 'mercado-pago', kind: 'receita', cat: 'rendimentos' });
+  const r1 = rnd(), rd = rint(3, 25), ra = ramt(25, 110);
+  if (r1 < 0.85) push(rd, { desc: 'Pix de Lucas Andrade', amount: ra, acc: 'nubank', kind: 'reembolso', note: 'devolveu a parte dele do jantar' });
+  push(16, { desc: 'Transferência para Mercado Pago', amount: -300, acc: 'btg-conta', kind: 'propria' });
+  push(16, { desc: 'Transferência do BTG', amount: 300, acc: 'mercado-pago', kind: 'propria' });
+  push(15, { desc: 'Pagamento da fatura BTG', amount: 0, acc: 'btg-conta', kind: 'fatura' });
+  const ex = EXTRAS[m];
+  if (ex.aporte) push(17, { desc: 'Aplicação · CDB / Tesouro', amount: -ex.aporte, acc: 'btg-conta', kind: 'aporte' });
+  for (const [d, desc, kind, cat, acc, amount] of ex.items) push(d, { desc, kind, cat, acc, amount });
+  out.sort((a, b) => b.date - a.date || b.seq - a.seq);
+  return out;
+}
+const TX = {};
+MONTHS.forEach(mo => TX[mo.key] = genMonth(mo));
+(() => { let prevCard = 2410.35; for (const mo of MONTHS) { const f = TX[mo.key].find(t => t.kind === 'fatura'); if (f) f.amount = -prevCard; prevCard = TX[mo.key].filter(t => t.acc === 'btg-cartao').reduce((a, t) => a - t.amount, 0); } })();
+const ALL_TX = MONTHS.flatMap(mo => TX[mo.key]);
+const findTx = id => ALL_TX.find(t => t.id === id);
+
+const PAT = {
+  series: [['2026-06', 41200, true], ['2026-07', 43150, true], ['2026-08', 61300, true], ['2026-09', 64900, true], ['2026-10', 67380, false], ['2026-11', 67770, false]].map(([key, v, est]) => ({ key, v, est, label: cap(MS[+key.slice(5) - 1]) })),
+  classes: [
+    { name: 'Renda fixa', color: '#2f6fed', value: 34600, items: [['Tesouro IPCA+ 2035', 10400], ['CDB 110% CDI', 9800], ['Tesouro Prefixado', 6300], ['CRA (inflação)', 4300], ['LCI', 3800]] },
+    { name: 'Renda variável', color: '#e8833a', value: 32200, items: [['Ações (11 ativos)', 15200], ['FIIs (4 fundos)', 15100], ['ETF', 1900]] },
+    { name: 'Caixa', color: '#3fa66b', value: 820, items: [['Saldo na conta investimento', 820]] },
+    { name: 'Cripto', color: '#9b6ad6', value: 150, items: [['Bitcoin', 150]] },
+  ],
+};
+const patAt = k => { const i = PAT.series.findIndex(p => p.key === k); return { cur: PAT.series[i], prev: PAT.series[i - 1] || PAT.series[i] }; };
+
+const BEN = {
+  provider: 'Benefícios BTG (exemplo hipotético)',
+  items: [{ name: 'Refeição', icon: '🍽️', balance: 412.30 }, { name: 'Alimentação', icon: '🛒', balance: 180.00 }, { name: 'Mobilidade', icon: '🚌', balance: 95.50 }],
+  tx: [
+    { date: new Date(2026, 10, 6), desc: 'Restaurante Bom Sabor', wallet: 'Refeição', amount: -38.9 },
+    { date: new Date(2026, 10, 4), desc: 'Padaria Pão Quente', wallet: 'Refeição', amount: -14.5 },
+    { date: new Date(2026, 10, 3), desc: 'Supermercado Bom Preço', wallet: 'Alimentação', amount: -96.4 },
+    { date: new Date(2026, 10, 1), desc: 'Crédito mensal', wallet: 'Refeição', amount: 700 },
+    { date: new Date(2026, 10, 1), desc: 'Crédito mensal', wallet: 'Alimentação', amount: 300 },
+    { date: new Date(2026, 10, 1), desc: 'Crédito mensal', wallet: 'Mobilidade', amount: 150 },
+  ],
+};
+const benTotal = () => BEN.items.reduce((a, i) => a + i.balance, 0);
+
+// ============================================================
+// In-memory state + derived data
+// ============================================================
+const S = {
+  variant: 'A', month: '2026-10', overrides: {}, rules: [], ruleOn: false, toast: null, benEmpty: false,
+  A: { tab: 'mes', gmode: 'cat', acc: 'all', cat: null, week: null, sheet: null, patOpen: null },
+  B: { stack: [] },
+  C: { open: null, pop: null, analysis: false, atab: 'mes', catOpen: null, dayOpen: null, rules: false },
+};
+const SCROLL = {};
+
+const ruleKey = t => t.desc.replace(/\s*\(\d+\/\d+\)$/, '');
+const matchRule = t => { const k = ruleKey(t).toLowerCase(); return S.rules.find(r => k.includes(r.match.toLowerCase())); };
+const effCat = t => S.overrides[t.id] || (matchRule(t) || {}).cat || t.cat;
+const catSource = t => S.overrides[t.id] ? 'manual' : matchRule(t) ? 'regra' : 'pluggy';
+const countRule = r => ALL_TX.filter(t => t.kind === 'gasto' && ruleKey(t).toLowerCase().includes(r.match.toLowerCase())).length;
+function txVis(t) {
+  if (t.kind === 'gasto') { const c = CATS[effCat(t)]; return { icon: c.icon, color: c.color, label: c.label }; }
+  if (t.kind === 'receita') return { ...KIND_VIS.receita, label: INCOME_LABEL[t.cat] };
+  return KIND_VIS[t.kind];
+}
+function kindInfo(t) {
+  switch (t.kind) {
+    case 'propria': return { tag: 'não conta', muted: true, note: 'Ignorada: é dinheiro mudando de bolso entre contas suas.' };
+    case 'fatura': return { tag: 'não conta', muted: true, note: 'Não conta: as compras do cartão já entraram como gasto, uma a uma.' };
+    case 'aporte': return { tag: null, note: 'Conta como aporte (dinheiro guardado), não como gasto.' };
+    case 'reembolso': return { tag: 'abate gastos', note: 'Devolução de alguém: sai dos gastos do mês, não é receita.' };
+    case 'gasto': return { tag: t.parcela ? `parcela ${t.parcela}` : null };
+    default: return { tag: null };
+  }
+}
+const srcLabel = t => ({ manual: 'editada por você', regra: 'por regra', pluggy: 'categoria do Pluggy' })[catSource(t)];
+
+function weeksOf(mo) {
+  const last = new Date(mo.y, mo.m + 1, 0).getDate(), weeks = []; let start = 1;
+  for (let d = 1; d <= last; d++) { if (new Date(mo.y, mo.m, d).getDay() === 0 || d === last) { weeks.push({ start, end: d, future: mo.partial && start > TODAY.getDate() }); start = d + 1; } }
+  return weeks;
+}
+const inWeek = (t, w) => t.date.getDate() >= w.start && t.date.getDate() <= w.end;
+function summarize(mk) {
+  const mo = monthOf(mk), weeks = weeksOf(mo).map(w => ({ ...w, total: 0, n: 0 }));
+  const r = { receitas: 0, gastos: 0, aportes: 0, reemb: 0, byCat: {}, byAcc: {}, byDay: {}, weeks };
+  for (const t of TX[mk]) {
+    if (t.kind === 'receita') r.receitas += t.amount;
+    else if (t.kind === 'aporte') r.aportes -= t.amount;
+    else if (t.kind === 'reembolso') r.reemb += t.amount;
+    else if (t.kind === 'gasto') {
+      const v = -t.amount, c = effCat(t), d = t.date.getDate();
+      r.gastos += v; r.byCat[c] = (r.byCat[c] || 0) + v; r.byAcc[t.acc] = (r.byAcc[t.acc] || 0) + v; r.byDay[d] = (r.byDay[d] || 0) + v;
+      const w = weeks.find(w => d >= w.start && d <= w.end); w.total += v; w.n++;
+    }
+  }
+  r.bruto = r.gastos; r.gastos -= r.reemb; r.saldo = r.receitas - r.gastos;
+  r.cats = Object.entries(r.byCat).map(([k, v]) => ({ k, v, ...CATS[k] })).sort((a, b) => b.v - a.v);
+  return r;
+}
+function accInOut(acc, mk) { let i = 0, o = 0; for (const t of TX[mk]) if (t.acc === acc) { if (t.amount > 0) i += t.amount; else o -= t.amount; } return [i, o]; }
+function groupByDay(list) { const g = []; let cur = null; for (const t of list) { const k = t.date.toDateString(); if (!cur || cur.k !== k) { cur = { k, date: t.date, items: [] }; g.push(cur); } cur.items.push(t); } return g; }
+
+// ============================================================
+// Tiny SVG charts
+// ============================================================
+function groupedBars(data, o) {
+  const W = o.w, H = o.h, p = { l: 4, r: 4, t: 10, b: 22 }, iw = W - p.l - p.r, ih = H - p.t - p.b;
+  const max = Math.max(1, ...data.flatMap(d => [d.a, d.b])), gw = iw / data.length, bw = Math.min(14, (gw - 12) / 2);
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto">`;
+  data.forEach((d, i) => {
+    const x = p.l + i * gw + gw / 2, ha = Math.max(1, ih * d.a / max), hb = Math.max(1, ih * d.b / max);
+    if (d.on) s += `<rect x="${x - gw / 2 + 2}" y="${p.t - 6}" width="${gw - 4}" height="${ih + 6}" rx="8" fill="${o.hl}"/>`;
+    s += `<rect x="${x - bw - 1.5}" y="${p.t + ih - ha}" width="${bw}" height="${ha}" rx="3" fill="${o.ca}"/>`;
+    s += `<rect x="${x + 1.5}" y="${p.t + ih - hb}" width="${bw}" height="${hb}" rx="3" fill="${o.cb}"/>`;
+    s += `<text x="${x}" y="${H - 6}" text-anchor="middle" font-size="11" fill="${o.text}" font-weight="${d.on ? 700 : 400}">${d.label}</text>`;
+  });
+  return s + '</svg>';
+}
+function vBars(data, o) {
+  const W = o.w, H = o.h, p = { l: 4, r: 4, t: 22, b: 22 }, iw = W - p.l - p.r, ih = H - p.t - p.b;
+  const max = Math.max(1, ...data.map(d => d.value)), gw = iw / data.length, bw = Math.min(40, gw * 0.62);
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto">`;
+  data.forEach((d, i) => {
+    const x = p.l + gw * i + gw / 2, h = Math.max(2, ih * d.value / max), y = p.t + ih - h;
+    s += `<rect x="${x - bw / 2}" y="${y}" width="${bw}" height="${h}" rx="6" fill="${o.color}" opacity="${d.value === max ? 1 : .5}"/>`;
+    s += `<text x="${x}" y="${y - 6}" text-anchor="middle" font-size="11" font-weight="600" fill="${o.vtext || o.text}">${fmtK(d.value)}</text>`;
+    s += `<text x="${x}" y="${H - 6}" text-anchor="middle" font-size="11" fill="${o.text}">${d.label}</text>`;
+  });
+  return s + '</svg>';
+}
+function donut(items, o) {
+  const size = o.size, th = o.th, r = (size - th) / 2, c = size / 2, C = 2 * Math.PI * r, total = items.reduce((a, b) => a + b.value, 0) || 1;
+  let off = 0, s = `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}"><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${o.track}" stroke-width="${th}"/>`;
+  items.forEach(it => { const len = C * it.value / total; s += `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${it.color}" stroke-width="${th}" stroke-dasharray="${Math.max(0, len - 2)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 ${c} ${c})"/>`; off += len; });
+  s += `<text x="${c}" y="${c - 4}" text-anchor="middle" font-size="12" fill="${o.sub}">${o.subText}</text><text x="${c}" y="${c + 16}" text-anchor="middle" font-size="18" font-weight="700" fill="${o.fg}">${o.center}</text></svg>`;
+  return s;
+}
+function lineChart(pts, o) {
+  const W = o.w, H = o.h, p = { l: 10, r: 10, t: 12, b: o.labels === false ? 6 : 24 }, iw = W - p.l - p.r, ih = H - p.t - p.b;
+  const vs = pts.map(d => d.v), mn = Math.min(...vs) * 0.92, mx = Math.max(...vs) * 1.03;
+  const X = i => p.l + iw * (pts.length === 1 ? 0.5 : i / (pts.length - 1)), Y = v => p.t + ih * (1 - (v - mn) / (mx - mn || 1));
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto">`;
+  const d = pts.map((q, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(q.v).toFixed(1)}`).join('');
+  if (o.fill) s += `<path d="${d}L${X(pts.length - 1)},${p.t + ih}L${X(0)},${p.t + ih}Z" fill="${o.fill}"/>`;
+  for (let i = 0; i < pts.length - 1; i++) s += `<line x1="${X(i)}" y1="${Y(pts[i].v)}" x2="${X(i + 1)}" y2="${Y(pts[i + 1].v)}" stroke="${o.color}" stroke-width="${o.sw || 2.5}" stroke-linecap="round" ${pts[i].est ? 'stroke-dasharray="3 5"' : ''}/>`;
+  pts.forEach((q, i) => {
+    if (o.dots !== false) s += `<circle cx="${X(i)}" cy="${Y(q.v)}" r="${q.on ? 5 : 3.5}" fill="${q.est ? o.bg : o.color}" stroke="${o.color}" stroke-width="2"/>`;
+    if (o.labels !== false) s += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle" font-size="11" fill="${o.text}" font-weight="${q.on ? 700 : 400}">${q.label}</text>`;
+  });
+  return s + '</svg>';
+}
+function divBars(data, o) {
+  const W = o.w, H = o.h, p = { t: 18, b: 22 }, ih = H - p.t - p.b, mx = Math.max(1, ...data.map(d => Math.abs(d.value))), mid = p.t + ih / 2, gw = W / data.length, bw = Math.min(28, gw * .55);
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto"><line x1="0" x2="${W}" y1="${mid}" y2="${mid}" stroke="${o.axis}"/>`;
+  data.forEach((d, i) => {
+    const x = gw * i + gw / 2, h = Math.max(2, (ih / 2) * Math.abs(d.value) / mx), y = d.value >= 0 ? mid - h : mid;
+    s += `<rect x="${x - bw / 2}" y="${y}" width="${bw}" height="${h}" rx="4" fill="${d.value >= 0 ? o.pos : o.neg}" opacity="${d.on ? 1 : .45}"/>`;
+    s += `<text x="${x}" y="${d.value >= 0 ? y - 5 : mid - 5}" text-anchor="middle" font-size="10" font-weight="600" fill="${o.text}">${fmtK(d.value)}</text>`;
+    s += `<text x="${x}" y="${H - 5}" text-anchor="middle" font-size="11" fill="${o.text}" font-weight="${d.on ? 700 : 400}">${d.label}</text>`;
+  });
+  return s + '</svg>';
+}
+function waffle(cats) {
+  const total = cats.reduce((a, c) => a + c.v, 0); if (!total) return '';
+  const raw = cats.map(c => c.v / total * 100), base = raw.map(Math.floor); const rem = 100 - base.reduce((a, b) => a + b, 0);
+  raw.map((r, i) => [r - base[i], i]).sort((a, b) => b[0] - a[0]).slice(0, rem).forEach(([, i]) => base[i]++);
+  let cells = ''; cats.forEach((c, i) => { for (let j = 0; j < base[i]; j++) cells += `<i style="background:${c.color}"></i>`; });
+  return `<div class="waffle">${cells}</div>`;
+}
+
+// ============================================================
+// Shared fragments
+// ============================================================
+const toastHTML = () => S.toast ? `<div class="toast">${S.toast}</div>` : '';
+const ruleToggle = t => `<button class="rtog ${S.ruleOn ? 'on' : ''}" data-act="rule-toggle"><span class="sw"></span><span>Aplicar a todas com “${esc(ruleKey(t))}”<small>liga antes de escolher: cria uma regra, que vale também para as próximas</small></span></button>`;
+function rulesList() {
+  if (!S.rules.length) return `<div class="note">Nenhuma regra ainda. Abra uma transação, ligue “aplicar a todas” e escolha a categoria.</div>`;
+  return S.rules.map((r, i) => `<div class="rule"><span>Descrição contém <b>“${esc(r.match)}”</b> → ${CATS[r.cat].icon} ${CATS[r.cat].label}<small>${countRule(r)} transações nos 6 meses</small></span><button data-act="rule-del" data-arg="${i}" aria-label="Apagar regra">✕</button></div>`).join('');
+}
+const benEmptyHTML = () => `<div class="empty-state"><div class="ic">🎁</div><b>Nenhum benefício conectado</b><p>Se o Pluggy trouxer contas de vale-refeição, alimentação ou mobilidade, elas aparecem aqui sozinhas.</p></div>`;
+const benToggle = () => `<button class="linkbtn" data-act="ben-empty">${S.benEmpty ? 'Ver com benefícios de exemplo' : 'Ver como fica sem benefícios conectados'}</button>`;
+function monthIdx() { return MONTHS.findIndex(m => m.key === S.month); }
+
+// ============================================================
+// Variant A: five fixed tabs
+// ============================================================
+function VA() {
+  const st = S.A, mo = monthOf(S.month), sum = summarize(S.month), idx = monthIdx();
+  const TABS = [['mes', '📅', 'Resumo'], ['gastos', '🍩', 'Gastos'], ['tx', '🧾', 'Transações'], ['pat', '📈', 'Patrimônio'], ['ben', '🎁', 'Benefícios']];
+  const title = { mes: 'Resumo', gastos: 'Gastos', tx: 'Transações', pat: 'Patrimônio', ben: 'Benefícios' }[st.tab];
+  const monthBound = ['mes', 'gastos', 'tx'].includes(st.tab);
+  const mnav = `<div class="mnav"><button data-act="month-prev" ${idx === 0 ? 'disabled' : ''}>‹</button><span>${mo.label}${mo.partial ? '<em>em andamento</em>' : ''}</span><button data-act="month-next" ${idx === MONTHS.length - 1 ? 'disabled' : ''}>›</button></div>`;
+  const rulesBtn = st.tab === 'tx' ? `<button class="va-hbtn" data-act="a-rules">Regras${S.rules.length ? ` (${S.rules.length})` : ''}</button>` : '';
+  let b = '';
+
+  if (st.tab === 'mes') {
+    if (mo.partial) b += `<div class="va-banner">Mês em andamento · dados até ${TODAY.getDate()}/${TODAY.getMonth() + 1}. O salário ainda não caiu.</div>`;
+    const kpi = (k, v, cls) => `<div class="va-kpi"><div class="k">${k}</div><div class="v ${cls}">${k === 'Saldo' ? signed(v) : fmt(v)}</div></div>`;
+    b += `<div class="va-kpis">${kpi('Receitas', sum.receitas, 'pos')}${kpi('Gastos', sum.gastos, '')}${kpi('Aportes', sum.aportes, 'blue')}${kpi('Saldo', sum.saldo, sum.saldo >= 0 ? 'pos' : 'neg')}</div>`;
+    b += `<div class="va-card"><div class="va-ch">Receitas × gastos, últimos 6 meses</div>${groupedBars(MONTHS.map(m => { const s = summarize(m.key); return { label: m.short, a: s.receitas, b: s.gastos, on: m.key === S.month }; }), { w: 326, h: 150, ca: '#12935a', cb: '#e5484d', hl: '#f2f4f8', text: '#8a909c' })}<div class="va-legend"><span><i style="background:#12935a"></i>Receitas</span><span><i style="background:#e5484d"></i>Gastos</span></div></div>`;
+    b += `<div class="va-h">Onde mais gastou</div><div class="va-card">${sum.cats.slice(0, 3).map(c => `<button class="va-row" data-act="a-cat" data-arg="${c.k}"><span class="va-ico" style="background:${c.color}22">${c.icon}</span><span class="t"><span class="d">${c.label}</span><span class="s">${pct(c.v / sum.bruto)} dos gastos</span></span><span class="amt">${fmt(c.v)}</span><span class="chev">›</span></button>`).join('')}</div>`;
+    b += `<div class="va-note" style="text-align:center">Pluggy · atualizado hoje, 06:12</div>`;
+  }
+
+  if (st.tab === 'gastos') {
+    b += `<div class="seg"><button class="${st.gmode === 'cat' ? 'on' : ''}" data-act="a-gmode" data-arg="cat">Por categoria</button><button class="${st.gmode === 'week' ? 'on' : ''}" data-act="a-gmode" data-arg="week">Por semana</button></div>`;
+    if (st.gmode === 'cat') {
+      b += `<div class="va-card center">${donut(sum.cats.map(c => ({ value: c.v, color: c.color })), { size: 190, th: 26, track: '#f0f1f4', center: fmt0(sum.gastos), subText: 'gastos do mês', sub: '#8a909c', fg: '#16181d' })}</div>`;
+      b += `<div class="va-card">${sum.cats.map(c => `<button class="va-row" data-act="a-cat" data-arg="${c.k}"><span class="va-ico" style="background:${c.color}22">${c.icon}</span><span class="t"><span class="d">${c.label}</span><span class="bar"><i style="width:${c.v / sum.cats[0].v * 100}%;background:${c.color}"></i></span></span><span class="r"><span class="amt">${fmt(c.v)}</span><span class="s" style="font-size:12px;color:#8a909c">${pct(c.v / sum.bruto)}</span></span></button>`).join('')}${sum.reemb ? `<div class="va-row"><span class="va-ico" style="background:#12935a22">↩️</span><span class="t"><span class="d">Reembolsos recebidos</span><span class="s">abatem do total</span></span><span class="amt pos">−${fmt(sum.reemb)}</span></div>` : ''}</div>`;
+    } else {
+      const ws = sum.weeks.filter(w => !w.future), avg = ws.reduce((a, w) => a + w.total, 0) / (ws.length || 1);
+      b += `<div class="va-card">${vBars(ws.map(w => ({ label: `${w.start}–${w.end}`, value: w.total })), { w: 326, h: 180, color: '#2457e6', text: '#8a909c', vtext: '#16181d' })}<div class="va-sub">Média por semana: <b>${fmt(avg)}</b> · semanas de segunda a domingo</div></div>`;
+      b += `<div class="va-card">${ws.map((w, i) => `<button class="va-row" data-act="a-week" data-arg="${i}"><span class="t"><span class="d">${w.start} a ${w.end} de ${MS[mo.m]}</span><span class="s">${w.n} compras</span></span><span class="amt">${fmt(w.total)}</span><span class="chev">›</span></button>`).join('')}</div>`;
+    }
+  }
+
+  if (st.tab === 'tx') {
+    b += `<div class="chips">${[['all', 'Todas'], ...ACC_ORDER.map(k => [k, ACC[k].name])].map(([k, l]) => `<button class="chip ${st.acc === k ? 'on' : ''}" data-act="a-acc" data-arg="${k}">${l}</button>`).join('')}</div>`;
+    if (st.cat || st.week != null) { const w = sum.weeks[st.week]; b += `<button class="va-filter" data-act="a-clear">${st.cat ? CATS[st.cat].icon + ' ' + CATS[st.cat].label : `Semana ${w.start}–${w.end}`} ✕</button>`; }
+    const list = TX[S.month].filter(t => (st.acc === 'all' || t.acc === st.acc) && (!st.cat || (t.kind === 'gasto' && effCat(t) === st.cat)) && (st.week == null || (t.kind === 'gasto' && inWeek(t, sum.weeks[st.week]))));
+    if (!list.length) b += `<div class="empty-state"><p>Nada por aqui neste mês.</p></div>`;
+    for (const g of groupByDay(list)) b += `<div class="va-day">${dayLabel(g.date)}</div><div class="va-card va-list">${g.items.map(rowA).join('')}</div>`;
+  }
+
+  if (st.tab === 'pat') {
+    const ser = PAT.series.map((p, i) => ({ ...p, on: i === PAT.series.length - 1 })), cur = ser.at(-1).v, prev = ser.at(-2).v;
+    b += `<div class="va-card"><div class="va-sub" style="margin:0">Patrimônio total hoje</div><div class="va-big">${fmt(cur)}</div><div class="va-sub ${cur >= prev ? 'pos' : 'neg'}" style="margin-top:0">${signed(cur - prev)} desde o fim de outubro</div>${lineChart(ser, { w: 326, h: 150, color: '#2457e6', fill: '#2457e614', text: '#8a909c', bg: '#fff' })}<div class="va-note">Pontilhado: estimado a partir das movimentações, antes de o app existir. Linha cheia: fotos que o próprio app tirou.</div></div>`;
+    b += `<div class="va-h">Distribuição por classe</div><div class="va-card"><div class="stackbar">${PAT.classes.map(c => `<i style="flex:${c.value};background:${c.color}"></i>`).join('')}</div>${PAT.classes.map(c => `<button class="va-row" data-act="a-pat" data-arg="${esc(c.name)}"><span class="dot" style="background:${c.color}"></span><span class="t"><span class="d">${c.name}</span></span><span class="r"><span class="amt">${fmt(c.value)}</span><span style="font-size:12px;color:#8a909c">${pct(c.value / cur)}</span></span><span class="chev">${st.patOpen === c.name ? '⌄' : '›'}</span></button>${st.patOpen === c.name ? `<div class="va-sublist">${c.items.map(([n, v]) => `<div><span>${n}</span><span>${fmt(v)}</span></div>`).join('')}</div>` : ''}`).join('')}</div>`;
+  }
+
+  if (st.tab === 'ben') {
+    if (S.benEmpty) b += `<div class="va-card">${benEmptyHTML()}</div>`;
+    else {
+      b += `<div class="va-sub">${BEN.provider}</div><div class="va-ben">${BEN.items.map(i => `<div class="va-kpi"><div class="k">${i.icon} ${i.name}</div><div class="v">${fmt(i.balance)}</div></div>`).join('')}</div>`;
+      b += `<div class="va-h">Movimentações</div><div class="va-card va-list">${BEN.tx.map(t => `<div class="va-row"><span class="t"><span class="d">${t.desc}</span><span class="s">${t.wallet} · ${dayLabel(t.date)}</span></span><span class="amt ${t.amount > 0 ? 'pos' : ''}">${signed(t.amount)}</span></div>`).join('')}</div>`;
+    }
+    b += benToggle();
+  }
+
+  let sheet = '';
+  if (st.sheet && st.sheet.tx) {
+    const t = findTx(st.sheet.tx), v = txVis(t), ki = kindInfo(t);
+    sheet = `<div class="sheet-bg" data-act="sheet-close"><div class="sheet" data-act="noop"><div class="grab"></div><div class="sh-d">${esc(t.desc)}</div><div class="sh-amt ${t.amount > 0 ? 'pos' : ''}">${signed(t.amount)}</div><div class="sh-s">${dayLabel(t.date)} · ${ACC[t.acc].name}${t.kind === 'gasto' ? ` · ${srcLabel(t)}` : ''}</div>${ki.note ? `<div class="note">${ki.note}</div>` : ''}${t.kind === 'gasto' ? `<div class="sh-lbl">Categoria</div>${ruleToggle(t)}<div class="catgrid">${Object.entries(CATS).map(([k, c]) => `<button class="catbtn ${effCat(t) === k ? 'on' : ''}" data-act="recat" data-arg="${k}" data-tx="${t.id}"><span>${c.icon}</span>${c.label}</button>`).join('')}</div>` : `<div class="note">${v.label}. Neste protótipo, só gastos trocam de categoria.</div>`}</div></div>`;
+  }
+  if (st.sheet && st.sheet.rules) sheet = `<div class="sheet-bg" data-act="sheet-close"><div class="sheet" data-act="noop"><div class="grab"></div><div class="sh-title">Regras de categoria</div>${rulesList()}</div></div>`;
+
+  return `<div class="va"><header class="va-head"><div class="va-top"><div class="va-title">${title}</div>${rulesBtn}</div>${monthBound ? mnav : ''}</header><main class="va-main" data-scroll="va-${st.tab}-${st.gmode}">${b}</main><nav class="va-tabs">${TABS.map(([k, ic, l]) => `<button class="${st.tab === k ? 'on' : ''}" data-act="a-tab" data-arg="${k}"><span class="ic">${ic}</span>${l}</button>`).join('')}</nav>${sheet}${toastHTML()}</div>`;
+}
+function rowA(t) {
+  const v = txVis(t), ki = kindInfo(t), src = t.kind === 'gasto' ? catSource(t) : 'pluggy';
+  return `<button class="va-row ${ki.muted ? 'muted' : ''}" data-act="tx-open" data-arg="${t.id}"><span class="va-ico" style="background:${v.color}22">${v.icon}</span><span class="t"><span class="d">${esc(t.desc)}</span><span class="s">${v.label}${src !== 'pluggy' ? ` · <em>${src === 'regra' ? 'por regra' : 'editada'}</em>` : ''} · ${ACC[t.acc].short}${ki.tag ? `<span class="tag">${ki.tag}</span>` : ''}</span></span><span class="amt ${t.amount > 0 ? 'pos' : ''}">${signed(t.amount)}</span></button>`;
+}
+
+// ============================================================
+// Variant B: one scrolling dashboard + drill-down pages
+// ============================================================
+function VB() {
+  const pg = S.B.stack[S.B.stack.length - 1];
+  if (!pg) return VBHome();
+  const key = 'vb-' + S.B.stack.length + '-' + JSON.stringify(pg);
+  const page = (title, body) => `<div class="vb"><div class="vb-page-h"><button class="vb-back" data-act="b-back" aria-label="Voltar">‹</button><b>${title}</b></div><main class="vb-main" data-scroll="${esc(key)}">${body}</main>${toastHTML()}</div>`;
+  const mo = monthOf(S.month), sum = summarize(S.month);
+
+  if (pg.p === 'cats') {
+    return page(`Gastos por categoria · ${mo.short}`, `<div class="vb-box" style="display:flex;justify-content:center">${donut(sum.cats.map(c => ({ value: c.v, color: c.color })), { size: 180, th: 18, track: '#1a1f27', center: fmt0(sum.gastos), subText: 'gastos', sub: '#9aa3af', fg: '#e8eaed' })}</div>${sum.cats.map(c => hbarB(c, sum.cats[0].v)).join('')}${sum.reemb ? `<div class="vb-sub" style="margin-top:10px">Reembolsos recebidos: <span class="pos">−${fmt(sum.reemb)}</span> (já abatidos do total)</div>` : ''}`);
+  }
+  if (pg.p === 'txlist') {
+    let list = TX[S.month], title = 'Todas as transações';
+    if (pg.acc) { list = list.filter(t => t.acc === pg.acc); title = ACC[pg.acc].name; }
+    if (pg.cat) { list = list.filter(t => t.kind === 'gasto' && effCat(t) === pg.cat); title = CATS[pg.cat].icon + ' ' + CATS[pg.cat].label; }
+    if (pg.week != null) { const w = sum.weeks[pg.week]; list = list.filter(t => t.kind === 'gasto' && inWeek(t, w)); title = `Semana ${w.start}–${w.end} ${MS[mo.m]}`; }
+    const g = list.filter(t => t.kind === 'gasto').reduce((a, t) => a - t.amount, 0);
+    let body = `<div class="vb-sub">${mo.label} · ${list.length} transações · gastos ${fmt(g)}</div>`;
+    for (const grp of groupByDay(list)) body += `<div class="vb-day">${dayLabel(grp.date)}</div>${grp.items.map(rowB).join('')}`;
+    return page(title, body);
+  }
+  if (pg.p === 'tx') {
+    const t = findTx(pg.id), v = txVis(t), ki = kindInfo(t);
+    let body = `<div class="vb-txhero"><div class="ic" style="background:${v.color}33">${v.icon}</div><div class="big ${t.amount > 0 ? 'pos' : ''}">${signed(t.amount)}</div><div class="d">${esc(t.desc)}</div><div class="s">${dayLabel(t.date)} · ${ACC[t.acc].name}</div>${ki.tag ? `<span class="tag" style="margin-top:8px">${ki.tag}</span>` : ''}${ki.note ? `<p class="note">${ki.note}</p>` : ''}</div>`;
+    if (t.kind === 'gasto') body += `<div class="vb-h">Categoria <small>${srcLabel(t)}</small></div>${ruleToggle(t)}${Object.entries(CATS).map(([k, c]) => `<button class="vb-catrow ${effCat(t) === k ? 'on' : ''}" data-act="recat" data-arg="${k}" data-tx="${t.id}"><span>${c.icon}</span><span class="t">${c.label}</span><span class="ck">${effCat(t) === k ? '✓' : ''}</span></button>`).join('')}`;
+    return page('Transação', body);
+  }
+  if (pg.p === 'pat') {
+    const ser = PAT.series.map((p, i) => ({ ...p, on: i === PAT.series.length - 1 })), cur = ser.at(-1).v, prev = ser.at(-2).v;
+    return page('Patrimônio', `<div class="vb-hero" style="padding-top:0"><div class="k">Total hoje</div><div class="v">${fmt0(cur)}</div><div class="s ${cur >= prev ? 'pos' : 'neg'}">${signed(cur - prev)} no mês</div></div><div class="vb-box">${lineChart(ser, { w: 326, h: 150, color: '#7aa2ff', fill: '#7aa2ff1c', text: '#6b7480', bg: '#151a21' })}<div class="vb-sub" style="margin:6px 0 0">┄ estimado (antes do app) · ━ fotos do app</div></div><div class="vb-h">Por classe</div><div class="vb-box">${PAT.classes.map(c => `<div class="vb-cls"><div class="top"><span><span class="dot" style="display:inline-block;background:${c.color};margin-right:8px"></span>${c.name}</span><span>${fmt0(c.value)} <span style="color:#6b7480;font-weight:400">${pct(c.value / cur)}</span></span></div>${c.items.map(([n, v]) => `<div class="it"><span>${n}</span><span>${fmt0(v)}</span></div>`).join('')}</div>`).join('')}</div>`);
+  }
+  if (pg.p === 'ben') {
+    return page('Benefícios', (S.benEmpty ? benEmptyHTML() : `<div class="vb-sub">${BEN.provider}</div><div class="vb-box">${BEN.items.map(i => `<div class="vb-acc"><span style="font-size:18px">${i.icon}</span><span class="t">${i.name}</span><span class="amt">${fmt(i.balance)}</span></div>`).join('')}</div><div class="vb-h">Movimentações</div>${BEN.tx.map(t => `<div class="vb-tx"><span class="t"><span class="d">${t.desc}</span><span class="s">${t.wallet} · ${dayLabel(t.date)}</span></span><span class="amt ${t.amount > 0 ? 'pos' : ''}">${signed(t.amount)}</span></div>`).join('')}`) + benToggle());
+  }
+  if (pg.p === 'rules') return page('Regras de categoria', rulesList());
+  return VBHome();
+}
+function VBHome() {
+  const mo = monthOf(S.month), sum = summarize(S.month);
+  const pills = MONTHS.map(m => `<button class="vb-pill ${m.key === S.month ? 'on' : ''}" data-act="month-set" data-arg="${m.key}">${m.short}${m.partial ? ' ·' : ''}</button>`).join('');
+  const R = Math.max(sum.receitas, sum.gastos + sum.aportes, 1), sobra = Math.max(0, sum.receitas - sum.gastos - sum.aportes);
+  const ws = sum.weeks.filter(w => !w.future), wmax = Math.max(1, ...ws.map(w => w.total));
+  const { cur, prev } = patAt(S.month);
+  let b = `<div class="vb-hero"><div class="k">Saldo de ${MF[mo.m]}${mo.partial ? ' (até agora)' : ''}</div><div class="v ${sum.saldo >= 0 ? 'pos' : 'neg'}">${signed(sum.saldo)}</div><div class="s">Receitas ${fmt0(sum.receitas)} · Gastos ${fmt0(sum.gastos)}</div></div>`;
+  b += `<div class="flowbar"><i style="width:${sum.gastos / R * 100}%;background:#ff6b6b"></i><i style="width:${sum.aportes / R * 100}%;background:#7aa2ff"></i><i style="width:${sobra / R * 100}%;background:#3dd68c"></i></div><div class="vb-legend"><span><i style="background:#ff6b6b"></i>Gastos <b>${fmt0(sum.gastos)}</b></span><span><i style="background:#7aa2ff"></i>Aportes <b>${fmt0(sum.aportes)}</b></span><span><i style="background:#3dd68c"></i>Sobrou <b>${fmt0(sobra)}</b></span></div>`;
+  b += `<div class="vb-sec"><div class="vb-sec-h"><b>Gastos por categoria</b><button class="vb-more" data-act="b-push" data-arg="${J({ p: 'cats' })}">Ver todas ›</button></div>${sum.cats.slice(0, 4).map(c => hbarB(c, sum.cats[0].v)).join('')}</div>`;
+  b += `<div class="vb-sec"><div class="vb-sec-h"><b>Semana a semana</b><span class="vb-sub" style="margin:0">seg a dom</span></div><div class="vb-weeks">${ws.map((w, i) => `<button class="vb-wk" data-act="b-push" data-arg="${J({ p: 'txlist', week: i })}"><span class="val">${fmtK(w.total)}</span><span class="col"><i style="height:${Math.max(3, w.total / wmax * 100)}%"></i></span><span class="lb">${w.start}–${w.end}</span></button>`).join('')}</div></div>`;
+  b += `<div class="vb-sec"><div class="vb-sec-h"><b>Contas e cartões</b><button class="vb-more" data-act="b-push" data-arg="${J({ p: 'txlist' })}">Todas as transações ›</button></div>${ACC_ORDER.map(k => { const a = ACC[k], g = sum.byAcc[k] || 0; return `<button class="vb-acc" data-act="b-push" data-arg="${J({ p: 'txlist', acc: k })}"><span class="dot" style="background:${a.color === '#0f2c5c' ? '#4f7fd9' : a.color}"></span><span class="t">${a.name}<div class="s">${a.balance != null ? 'saldo ' + fmt(a.balance) : 'fatura aberta ' + fmt(g)}</div></span><span class="r"><span class="amt">${fmt(g)}</span><div class="s">gastos no mês</div></span></button>`; }).join('')}</div>`;
+  b += `<div class="vb-sec"><button class="vb-pat" data-act="b-push" data-arg="${J({ p: 'pat' })}"><span class="t"><b style="font-size:15px">Patrimônio</b><div class="big">${fmt0(cur.v)}</div><div class="vb-sub ${cur.v - prev.v >= 0 ? 'pos' : 'neg'}" style="margin:0">${signed(cur.v - prev.v)} em ${MS[mo.m]}</div></span><span style="width:130px">${lineChart(PAT.series, { w: 130, h: 50, color: '#7aa2ff', text: '#6b7480', bg: '#0e1116', labels: false, dots: false, sw: 2 })}</span><span class="vb-more">›</span></button></div>`;
+  b += `<div class="vb-sec"><button class="vb-acc" data-act="b-push" data-arg="${J({ p: 'ben' })}" style="padding:0"><span style="font-size:18px">🎁</span><span class="t"><b style="font-size:15px">Benefícios</b><div class="s">${S.benEmpty ? 'nenhum conectado' : BEN.items.map(i => i.name).join(' · ')}</div></span><span class="amt">${S.benEmpty ? '—' : fmt(benTotal())}</span><span class="vb-more">›</span></button></div>`;
+  b += `<div class="vb-sec"><button class="vb-acc" data-act="b-push" data-arg="${J({ p: 'rules' })}" style="padding:0"><span style="font-size:16px">⚙️</span><span class="t">Regras de categoria<div class="s">${S.rules.length} ${S.rules.length === 1 ? 'regra' : 'regras'}</div></span><span class="vb-more">›</span></button></div>`;
+  return `<div class="vb"><div class="vb-top"><div class="vb-upd">Pluggy · atualizado hoje, 06:12</div><div class="vb-pills">${pills}</div></div><main class="vb-main" data-scroll="vb-home">${b}</main>${toastHTML()}</div>`;
+}
+const hbarB = (c, max) => `<button class="hbar" data-act="b-push" data-arg="${J({ p: 'txlist', cat: c.k })}"><span>${c.icon}</span><span class="lab"><span>${c.label}</span><span class="track"><span class="fill" style="display:block;width:${c.v / max * 100}%;background:${c.color}"></span></span></span><span class="amt">${fmt(c.v)}</span></button>`;
+function rowB(t) {
+  const v = txVis(t), ki = kindInfo(t), src = t.kind === 'gasto' ? catSource(t) : 'pluggy';
+  return `<button class="vb-tx ${ki.muted ? 'muted' : ''}" data-act="tx-open" data-arg="${t.id}"><span class="ic" style="background:${v.color}2a">${v.icon}</span><span class="t"><span class="d">${esc(t.desc)}</span><span class="s">${v.label}${src !== 'pluggy' ? ` · <em>${src === 'regra' ? 'por regra' : 'editada'}</em>` : ''} · ${ACC[t.acc].name}${ki.tag ? `<span class="tag">${ki.tag}</span>` : ''}</span></span><span class="amt ${t.amount > 0 ? 'pos' : ''}">${signed(t.amount)}</span></button>`;
+}
+
+// ============================================================
+// Variant C: wallet of accounts + separate "Análise" sheet
+// ============================================================
+function walletCards() {
+  const mo = monthOf(S.month), sum = summarize(S.month), { cur, prev } = patAt(S.month);
+  const io = k => accInOut(k, S.month);
+  const bankSub = k => { const [i, o] = io(k); return `${mo.short}: entrou ${fmt0(i)} · saiu ${fmt0(o)}`; };
+  return [
+    { key: 'btg-conta', name: 'BTG Conta', big: fmt(ACC['btg-conta'].balance), sub: bankSub('btg-conta'), bg: 'linear-gradient(135deg,#0f2c5c,#1d4a8f)', lbl: 'CONTA' },
+    { key: 'btg-cartao', name: 'BTG Cartão', big: fmt(sum.byAcc['btg-cartao'] || 0), sub: `Fatura de ${MS[mo.m]}${mo.partial ? ' (aberta)' : ''} · ${TX[S.month].filter(t => t.acc === 'btg-cartao').length} compras`, bg: 'linear-gradient(135deg,#1b3f86,#3f74d6)', lbl: 'CRÉDITO' },
+    { key: 'nubank', name: 'Nubank', big: fmt(ACC.nubank.balance), sub: bankSub('nubank'), bg: 'linear-gradient(135deg,#5b119c,#8a2be2)', lbl: 'CONTA' },
+    { key: 'mercado-pago', name: 'Mercado Pago', big: fmt(ACC['mercado-pago'].balance), sub: bankSub('mercado-pago'), bg: 'linear-gradient(135deg,#0077b3,#14b0e8)', lbl: 'CONTA' },
+    { key: 'inv', name: 'Investimentos', big: fmt(cur.v), sub: `${signed(cur.v - prev.v)} em ${MS[mo.m]} · ${PAT.classes.length} classes`, bg: 'linear-gradient(135deg,#17472a,#2f8a4c)', lbl: 'PATRIMÔNIO' },
+    { key: 'ben', name: 'Benefícios', big: S.benEmpty ? '—' : fmt(benTotal()), sub: S.benEmpty ? 'nenhum conectado' : BEN.items.map(i => i.name).join(' · '), bg: 'linear-gradient(135deg,#8a4b0f,#cf7a22)', lbl: 'BENEFÍCIOS' },
+  ];
+}
+const cardHTML = (c, solo) => `<${solo ? 'div' : 'button'} class="wcard ${solo ? 'solo' : ''}" ${solo ? '' : `data-act="c-open" data-arg="${c.key}"`} style="background:${c.bg}"><div class="row"><span class="n">${c.name}</span><span class="b">${c.big}</span></div><div class="m">${c.sub}</div><span class="lbl2">${c.lbl}</span><span class="chipmark"></span></${solo ? 'div' : 'button'}>`;
+function monthCtlC() {
+  const mo = monthOf(S.month), idx = monthIdx();
+  return `<div class="vc-mctl"><button data-act="month-prev" ${idx === 0 ? 'disabled' : ''}>‹</button><span>${mo.short} ${mo.y}${mo.partial ? ' ·' : ''}</span><button data-act="month-next" ${idx === MONTHS.length - 1 ? 'disabled' : ''}>›</button></div>`;
+}
+function VC() {
+  const st = S.C;
+  const inner = st.open ? VCAccount(st.open) : VCHome();
+  return `<div class="vc">${inner}${st.analysis ? VCAnalysis() : ''}${toastHTML()}</div>`;
+}
+function VCHome() {
+  const sum = summarize(S.month);
+  const strip = [['Entrou', sum.receitas], ['Gastou', sum.gastos], ['Investiu', sum.aportes], ['Sobrou', sum.saldo]].map(([k, v]) => `<div><div class="k">${k}</div><div class="v ${k === 'Sobrou' ? (v >= 0 ? 'pos' : 'neg') : ''}">${fmt0(v)}</div></div>`).join('');
+  return `<div class="vc-head"><div><div class="vc-hi">Carteira</div><div class="vc-upd">Pluggy · atualizado hoje, 06:12</div></div>${monthCtlC()}</div><div class="vc-strip">${strip}</div><main class="vc-main" data-scroll="vc-home">${walletCards().map(c => cardHTML(c)).join('')}</main><button class="vc-fab" data-act="c-analysis">📊 Análise do mês</button>`;
+}
+function VCAccount(key) {
+  const st = S.C, card = walletCards().find(c => c.key === key);
+  const head = `<div class="vc-head"><button class="vc-back" data-act="c-close">‹ Carteira</button>${['inv', 'ben'].includes(key) ? '' : `<div style="display:flex;gap:6px;align-items:center"><button class="vc-hbtn" data-act="c-rules">Regras${S.rules.length ? ` (${S.rules.length})` : ''}</button>${monthCtlC()}</div>`}</div>`;
+  let b = cardHTML(card, true);
+  if (key === 'inv') {
+    const ser = PAT.series.map(p => ({ ...p, on: p.key === S.month })), cur = PAT.series.at(-1).v;
+    b += `<div class="vc-cap">Evolução</div>${lineChart(ser, { w: 340, h: 150, color: '#2f8a4c', fill: '#2f8a4c18', text: '#9a9388', bg: '#fbfaf7' })}<div class="note" style="font-size:12px">Pontilhado: estimado a partir das movimentações, antes de o app existir.</div>`;
+    b += `<div class="vc-cap">Distribuição</div><div style="display:flex;justify-content:center;margin:6px 0 10px">${donut(PAT.classes.map(c => ({ value: c.value, color: c.color })), { size: 170, th: 30, track: '#f1eee7', center: fmt0(cur), subText: 'hoje', sub: '#9a9388', fg: '#1d1b18' })}</div>`;
+    b += PAT.classes.map(c => `<div class="vc-cls"><span class="dot" style="background:${c.color}"></span><span class="t"><b>${c.name}</b></span><span class="amt">${fmt(c.value)}</span><span style="width:44px;text-align:right;color:#9a9388;font-size:12px">${pct(c.value / cur)}</span></div>${c.items.map(([n, v]) => `<div class="vc-it"><span>${n}</span><span>${fmt(v)}</span></div>`).join('')}`).join('');
+  } else if (key === 'ben') {
+    if (S.benEmpty) b += benEmptyHTML();
+    else b += `<div class="vc-ben">${BEN.items.map(i => `<div><div class="k">${i.icon} ${i.name}</div><div class="v">${fmt(i.balance)}</div></div>`).join('')}</div><div class="vc-cap">Movimentações</div>${BEN.tx.map(t => `<div class="vc-tx"><div class="l"><div class="d">${t.desc}</div><div class="s">${t.wallet} · ${dayLabel(t.date)}</div></div><div class="amt ${t.amount > 0 ? 'pos' : ''}">${signed(t.amount)}</div></div>`).join('')}`;
+    b += benToggle();
+  } else {
+    if (st.rules) b += `<div class="vc-pop"><div class="h">Regras de categoria</div>${rulesList()}</div>`;
+    const list = TX[S.month].filter(t => t.acc === key);
+    if (!list.length) b += `<div class="empty-state"><p>Nenhuma movimentação neste mês.</p></div>`;
+    for (const g of groupByDay(list)) b += `<div class="vc-day">${dayLabel(g.date)}</div>${g.items.map(rowC).join('')}`;
+  }
+  return `${head}<main class="vc-main" data-scroll="vc-acc-${key}" style="padding-bottom:30px">${b}</main>`;
+}
+function rowC(t) {
+  const v = txVis(t), ki = kindInfo(t), open = S.C.pop === t.id, src = t.kind === 'gasto' ? catSource(t) : 'pluggy';
+  const chip = t.kind === 'gasto' ? `<button class="cchip ${open ? 'open' : ''}" data-act="tx-open" data-arg="${t.id}" style="--c:${v.color}">${v.icon} ${v.label} ▾</button>` : `<span class="cchip flat" style="--c:${v.color}">${v.icon} ${v.label}</span>`;
+  const pop = open ? `<div class="vc-pop"><div class="h">Mudar a categoria de “${esc(t.desc)}”</div>${ruleToggle(t)}<div class="chs">${Object.entries(CATS).map(([k, c]) => `<button class="cchip ${effCat(t) === k ? 'on' : ''}" style="--c:${c.color}" data-act="recat" data-arg="${k}" data-tx="${t.id}">${c.icon} ${c.label}</button>`).join('')}</div></div>` : '';
+  return `<div class="vc-tx ${ki.muted ? 'muted' : ''}"><div class="l"><div class="d">${esc(t.desc)}</div><div class="s">${chip}${src !== 'pluggy' ? `<em>${src === 'regra' ? 'por regra' : 'editada'}</em>` : ''}${ki.tag ? `<span class="tag" style="margin:0">${ki.tag}</span>` : ''}</div></div><div class="amt ${t.amount > 0 ? 'pos' : ''}">${signed(t.amount)}</div></div>${pop}`;
+}
+function VCAnalysis() {
+  const st = S.C, mo = monthOf(S.month), sum = summarize(S.month);
+  let b = '';
+  if (st.atab === 'mes') {
+    const mx = Math.max(sum.receitas, sum.gastos, sum.aportes, 1);
+    b += [['Entrou', sum.receitas, '#3fa66b'], ['Gastou', sum.gastos, '#d65c33'], ['Investiu', sum.aportes, '#2f6fed']].map(([k, v, c]) => `<div class="vc-meas"><span>${k}</span><span class="track"><i style="width:${v / mx * 100}%;background:${c}"></i></span><span class="amt">${fmt(v)}</span></div>`).join('');
+    b += `<div class="vc-meas" style="border-top:1px solid #e6e1d6;margin-top:4px;padding-top:10px"><b>Sobrou</b><span></span><span class="amt ${sum.saldo >= 0 ? 'pos' : 'neg'}">${signed(sum.saldo)}</span></div>`;
+    if (sum.reemb) b += `<div class="note" style="font-size:12px">Gastos já descontam ${fmt(sum.reemb)} de reembolsos recebidos.</div>`;
+    b += `<div class="vc-cap">Sobrou, mês a mês</div>${divBars(MONTHS.map(m => ({ label: m.short, value: summarize(m.key).saldo, on: m.key === S.month })), { w: 340, h: 170, pos: '#3fa66b', neg: '#d65c33', axis: '#e6e1d6', text: '#7b756b' })}`;
+  } else if (st.atab === 'cats') {
+    b += `<div class="vc-cap">Cada quadradinho é 1% dos gastos</div>${waffle(sum.cats)}`;
+    b += sum.cats.map(c => { const open = st.catOpen === c.k; const items = open ? TX[S.month].filter(t => t.kind === 'gasto' && effCat(t) === c.k) : []; return `<button class="vc-catrow" data-act="c-cat" data-arg="${c.k}"><span class="dot" style="background:${c.color}"></span><span class="t">${c.icon} ${c.label}<small>${pct(c.v / sum.bruto)}</small></span><span class="amt">${fmt(c.v)}</span><span style="color:#9a9388">${open ? '⌄' : '›'}</span></button>${open ? `<div class="vc-mini">${items.map(t => `<div><span>${t.date.getDate()}/${t.date.getMonth() + 1} · ${esc(t.desc)} <span style="color:#9a9388">· ${ACC[t.acc].short}</span></span><span class="amt">${fmt(-t.amount)}</span></div>`).join('')}</div>` : ''}`; }).join('');
+  } else {
+    const last = new Date(mo.y, mo.m + 1, 0).getDate(), first = (new Date(mo.y, mo.m, 1).getDay() + 6) % 7, max = Math.max(1, ...Object.values(sum.byDay));
+    let cells = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D', 'semana'].map(h => `<div class="hd">${h}</div>`).join('');
+    let col = 0, wk = 0;
+    for (let i = 0; i < first; i++) { cells += '<div></div>'; col++; }
+    for (let d = 1; d <= last; d++) {
+      const v = sum.byDay[d] || 0, fut = mo.partial && d > TODAY.getDate(), a = v / max;
+      wk += v;
+      cells += `<button class="d ${fut ? 'fut' : ''} ${st.dayOpen === d ? 'on' : ''}" ${fut ? 'disabled' : `data-act="c-day" data-arg="${d}"`} style="background:${v ? `rgba(214,92,51,${(0.14 + 0.86 * a).toFixed(2)})` : '#f1eee7'};color:${a > 0.5 ? '#fff' : '#1d1b18'}" title="${fmt(v)}">${d}</button>`;
+      col++;
+      if (col === 7 || d === last) { for (; col < 7; col++) cells += '<div></div>'; cells += `<div class="wt">${wk ? fmtK(wk) : '–'}</div>`; col = 0; wk = 0; }
+    }
+    b += `<div class="vc-cap">Quanto mais escuro, mais gastou no dia</div><div class="cal">${cells}</div>`;
+    if (st.dayOpen) { const items = TX[S.month].filter(t => t.date.getDate() === st.dayOpen && t.kind === 'gasto'); b += `<div class="vc-cap">${dayLabel(new Date(mo.y, mo.m, st.dayOpen))}</div><div class="vc-mini">${items.length ? items.map(t => `<div><span>${esc(t.desc)} <span style="color:#9a9388">· ${CATS[effCat(t)].label}</span></span><span class="amt">${fmt(-t.amount)}</span></div>`).join('') : '<div><span>Nenhum gasto.</span></div>'}</div>`; }
+    else b += `<div class="note" style="font-size:12px;margin-top:10px">Toque num dia para ver os gastos dele.</div>`;
+  }
+  return `<div class="vc-an" data-act="c-analysis"><div class="vc-an-in" data-act="noop"><div class="vc-an-h"><b>Análise</b><div style="display:flex;gap:8px;align-items:center">${monthCtlC()}<button class="x" data-act="c-analysis" aria-label="Fechar">✕</button></div></div><div class="seg">${[['mes', 'Mês'], ['cats', 'Categorias'], ['weeks', 'Semanas']].map(([k, l]) => `<button class="${st.atab === k ? 'on' : ''}" data-act="c-atab" data-arg="${k}">${l}</button>`).join('')}</div><div class="vc-an-body" data-scroll="vc-an-${st.atab}">${b}</div></div></div>`;
+}
+
+// ============================================================
+// Variant registry, notes panel, actions, render loop
+// ============================================================
+const VARIANTS = {
+  A: { name: 'Abas fixas', view: VA, idea: 'Cinco abas fixas no rodapé, uma por assunto: Resumo, Gastos, Transações, Patrimônio e Benefícios. O mês escolhido no topo vale para as três primeiras.', recat: 'toque na transação e uma folha sobe de baixo.' },
+  B: { name: 'Painel único', view: VB, idea: 'Uma tela só, rolando, com um pedaço de tudo. Tocar num bloco abre o detalhe, e ‹ volta. Não tem barra de abas; o mês fica nas pílulas do topo.', recat: 'a transação abre em tela cheia.' },
+  C: { name: 'Carteira de contas', view: VC, idea: 'A tela inicial é a pilha de contas e cartões, como as abas por banco da sua planilha. Mês, categorias e semanas ficam no botão “Análise”.', recat: 'toque no rótulo da categoria, direto na lista.' },
+};
+const ORDER = ['A', 'B', 'C'];
+function renderNotes() {
+  const v = VARIANTS[S.variant];
+  const rules = S.rules.length ? S.rules.map(r => `  “${r.match}” → ${CATS[r.cat].label}`).join('\n') : '  nenhuma';
+  document.getElementById('notes').innerHTML = `<span class="n-tag">PROTÓTIPO · DESCARTÁVEL</span><h1>Telas do v1</h1><h2>${S.variant} · ${v.name}</h2><p>${v.idea}</p><p style="margin-top:6px"><b>Recategorizar:</b> ${v.recat}</p>
+  <h3>Para reparar</h3><ul>
+  <li>Ao abrir o app, o que você quer ver primeiro: o resumo do mês (A), tudo de uma vez (B) ou suas contas (C)?</li>
+  <li>Para achar uma compra específica, por onde você começaria?</li>
+  <li>Qual jeito de recategorizar dá menos trabalho?</li>
+  <li>Patrimônio e benefícios merecem lugar fixo, ou podem ficar um nível abaixo?</li>
+  <li>Vale misturar, por exemplo a tela inicial do B com as abas do A.</li></ul>
+  <h3>Estado (em memória)</h3><div class="state">variante: ${S.variant}
+mês: ${S.month}
+regras:
+${esc(rules)}
+ajustes manuais: ${Object.keys(S.overrides).length}
+benefícios: ${S.benEmpty ? 'vazio' : 'exemplo'}</div>
+  <p class="fine">Dados inventados no formato da sua planilha (contas, categorias, transferências próprias, fatura, reembolso, parcelas). Nenhum valor é real. Teclas ← → trocam a variante.</p>`;
+}
+let toastTimer;
+function toast(msg) { S.toast = msg; clearTimeout(toastTimer); toastTimer = setTimeout(() => { S.toast = null; render(); }, 3000); }
+function applyRecat(id, cat) {
+  const t = findTx(id);
+  if (S.ruleOn) {
+    const key = ruleKey(t);
+    S.rules = S.rules.filter(r => r.match.toLowerCase() !== key.toLowerCase());
+    S.rules.unshift({ match: key, cat });
+    ALL_TX.forEach(x => { if (ruleKey(x).toLowerCase().includes(key.toLowerCase())) delete S.overrides[x.id]; });
+    toast(`Regra criada: “${esc(key)}” → ${CATS[cat].label} (${countRule(S.rules[0])} transações)`);
+  } else {
+    S.overrides[id] = cat;
+    toast(`“${esc(t.desc)}” agora é ${CATS[cat].label}`);
+  }
+  S.ruleOn = false;
+}
+function setVariant(v) {
+  S.variant = v;
+  try { const u = new URL(location.href); u.searchParams.set('variant', v); history.replaceState(null, '', u); } catch (e) { /* file:// may refuse; fine */ }
+}
+const shiftMonth = d => { const i = Math.min(MONTHS.length - 1, Math.max(0, monthIdx() + d)); S.month = MONTHS[i].key; S.C.dayOpen = null; S.C.catOpen = null; };
+const ACT = {
+  'variant-prev': () => setVariant(ORDER[(ORDER.indexOf(S.variant) + ORDER.length - 1) % ORDER.length]),
+  'variant-next': () => setVariant(ORDER[(ORDER.indexOf(S.variant) + 1) % ORDER.length]),
+  'month-prev': () => shiftMonth(-1), 'month-next': () => shiftMonth(1), 'month-set': k => { S.month = k; },
+  'a-tab': t => { S.A.tab = t; if (t !== 'tx') { S.A.cat = null; S.A.week = null; } }, 'a-gmode': m => { S.A.gmode = m; }, 'a-acc': a => { S.A.acc = a; },
+  'a-cat': c => { S.A.tab = 'tx'; S.A.cat = c; S.A.week = null; S.A.acc = 'all'; }, 'a-week': i => { S.A.tab = 'tx'; S.A.week = +i; S.A.cat = null; S.A.acc = 'all'; },
+  'a-clear': () => { S.A.cat = null; S.A.week = null; }, 'a-pat': n => { S.A.patOpen = S.A.patOpen === n ? null : n; },
+  'a-rules': () => { S.A.sheet = { rules: true }; }, 'sheet-close': () => { S.A.sheet = null; },
+  'tx-open': id => { S.ruleOn = false; if (S.variant === 'A') S.A.sheet = { tx: id }; else if (S.variant === 'B') S.B.stack.push({ p: 'tx', id }); else S.C.pop = S.C.pop === id ? null : id; },
+  'rule-toggle': () => { S.ruleOn = !S.ruleOn; },
+  'recat': (cat, el) => { applyRecat(el.dataset.tx, cat); if (S.variant === 'A') S.A.sheet = null; else if (S.variant === 'B') S.B.stack.pop(); else S.C.pop = null; },
+  'rule-del': i => { S.rules.splice(+i, 1); },
+  'b-push': j => { S.B.stack.push(JSON.parse(j)); }, 'b-back': () => { S.B.stack.pop(); },
+  'c-open': k => { S.C.open = k; S.C.pop = null; S.C.rules = false; }, 'c-close': () => { S.C.open = null; S.C.pop = null; },
+  'c-analysis': () => { S.C.analysis = !S.C.analysis; }, 'c-atab': t => { S.C.atab = t; S.C.catOpen = null; S.C.dayOpen = null; },
+  'c-cat': c => { S.C.catOpen = S.C.catOpen === c ? null : c; }, 'c-day': d => { S.C.dayOpen = S.C.dayOpen === +d ? null : +d; }, 'c-rules': () => { S.C.rules = !S.C.rules; },
+  'ben-empty': () => { S.benEmpty = !S.benEmpty; },
+};
+function render() {
+  const app = document.getElementById('app');
+  app.querySelectorAll('[data-scroll]').forEach(el => { SCROLL[el.dataset.scroll] = el.scrollTop; });
+  app.innerHTML = VARIANTS[S.variant].view();
+  app.querySelectorAll('[data-scroll]').forEach(el => { const y = SCROLL[el.dataset.scroll]; if (y) el.scrollTop = y; });
+  document.getElementById('sw-label').textContent = `${S.variant} · ${VARIANTS[S.variant].name}`;
+  renderNotes();
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const act = el.dataset.act; if (act === 'noop') return;
+  const fn = ACT[act]; if (!fn) return;
+  fn(el.dataset.arg, el); render();
+});
+document.addEventListener('keydown', e => {
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
+  if (e.key === 'ArrowLeft') { ACT['variant-prev'](); render(); }
+  if (e.key === 'ArrowRight') { ACT['variant-next'](); render(); }
+});
+const qv = (new URLSearchParams(location.search).get('variant') || '').toUpperCase();
+if (ORDER.includes(qv)) S.variant = qv;
+render();
+</script>
+</body>
+</html>
