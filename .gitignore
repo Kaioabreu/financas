@@ -1,0 +1,22 @@
+# Dependências e builds
+node_modules/
+build/
+dist/
+.expo/
+*.apk
+*.aab
+
+# Segredos — nunca commitar credenciais do Pluggy nem chaves de assinatura
+.env
+.env.*
+*.keystore
+*.jks
+
+# Dados financeiros reais — nunca entram no repo
+*.xlsx
+*.xls
+*.csv
+*.ofx
+*.pdf
+data/
+.pluggy-dump/
