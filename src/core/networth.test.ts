@@ -172,7 +172,7 @@ describe("Patrimônio: retratos e curva", () => {
 
     const view = await w.core.netWorth();
     // Only the November 9 Retrato (the last of that day) feeds the curve; today is December 19.
-    expect(view.curve.map((p) => [p.month, p.total, p.today])).toEqual([
+    expect(view.curve.filter((p) => !p.estimated).map((p) => [p.month, p.total, p.today])).toEqual([
       ["2026-11", 1500, false],
       ["2026-12", 2000, true],
     ]);
@@ -191,7 +191,7 @@ describe("Patrimônio: retratos e curva", () => {
 
     const view = await w.core.netWorth();
 
-    expect(view.curve.map((p) => [p.month, p.total])).toEqual([
+    expect(view.curve.filter((p) => !p.estimated).map((p) => [p.month, p.total])).toEqual([
       ["2026-09", 300],
       ["2026-10", 400],
       ["2026-11", 900],
@@ -206,7 +206,7 @@ describe("Patrimônio: retratos e curva", () => {
     w.state.accounts = [bank(5)];
     await w.core.sync({ manual: true }); // lastUpdatedAt did not move
     w.clock.advance(DAY * 40);
-    expect((await w.core.netWorth()).curve[0]).toMatchObject({ total: 1000 });
+    expect((await w.core.netWorth()).curve.find((p) => !p.estimated)).toMatchObject({ total: 1000 });
   });
 });
 
