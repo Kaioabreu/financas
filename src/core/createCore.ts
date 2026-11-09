@@ -9,6 +9,7 @@ import { createConnections, type ConnectionsApi } from "./connections";
 import { createSync, type SyncApi } from "./sync";
 import { createEstimate } from "./estimate";
 import { createNetWorth, type NetWorthApi } from "./networth";
+import { createPerformance, type PerformanceApi } from "./performance";
 import { createSummary, type SummaryApi } from "./summary";
 import { createBills, type BillsApi } from "./bills";
 import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
@@ -68,7 +69,7 @@ export type CredentialsStatus = { saved: false } | { saved: true; clientId: stri
 
 export type Appearance = "system" | "light" | "dark";
 
-export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, SummaryApi, NetWorthApi, BillsApi {
+export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, SummaryApi, NetWorthApi, BillsApi, PerformanceApi {
   /** The "Copiar diagnóstico" text: only allow-listed facts, never amounts, names or ids. */
   diagnostic(): Promise<string>;
   credentialsStatus(): Promise<CredentialsStatus>;
@@ -233,6 +234,14 @@ export function createCore(deps: CoreDeps): Core {
 
   const summary = createSummary({ db, clock: deps.clock, classify: classification.classify });
 
+  const performance = createPerformance({
+    db,
+    fetch: deps.fetch,
+    clock: deps.clock,
+    monthSummary: summary.monthSummary,
+    portfolioNow: async () => (await networth.netWorth()).classes.filter((k) => k.class !== "cash").reduce((s, k) => s + k.value, 0),
+  });
+
   const lock = createLock({
     clock: deps.clock,
     readEnabled: async () => (await readMeta(LOCK_KEY)) !== "0",
@@ -247,6 +256,7 @@ export function createCore(deps: CoreDeps): Core {
     ...summary,
     billGaps: bills.billGaps,
     netWorth: networth.netWorth,
+    performance: performance.performance,
     ...sync,
     cpfStatus: classification.cpfStatus,
     setCpf: classification.setCpf,
