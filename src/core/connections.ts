@@ -7,7 +7,7 @@ import type { CoreDatabase } from "./createCore";
 import { buildInstallmentPlan } from "./installments";
 import { dayLabel, deriveStatus, type ConnectionStatus } from "./status";
 
-export type ConnectErrorKind = "limit" | "offline" | "unexpected";
+export type ConnectErrorKind = "limit" | "connector" | "offline" | "unexpected";
 export interface ConnectError {
   kind: ConnectErrorKind;
   message: string;
@@ -130,6 +130,17 @@ interface PluggyItem {
 }
 
 const WAITING_FOR_USER = ["WAITING_USER_ACTION", "WAITING_USER_INPUT"];
+/**
+ * ASSUMPTION (not confirmed against Pluggy's docs): a refused POST /items is the "limit of 5 banks"
+ * unless its message names the connector or the sandbox ("Contas de teste só podem conectar conectores
+ * sandbox", or a connector that is not enabled/found/available). Anything else stays "limit", the
+ * previous behaviour, so a wrong guess here never hides the limit message.
+ */
+function isConnectorRefusal(body: unknown): boolean {
+  const text = String((body as { message?: unknown } | null)?.message ?? "").toLowerCase();
+  return /sandbox|conectores?|connectors?/.test(text) && !/too many|limit|limite|maximum|máximo/.test(text);
+}
+
 const json = (response: Response) => response.json().catch(() => null) as Promise<any>;
 
 export function createConnections(deps: Deps): ConnectionsApi {
@@ -140,6 +151,10 @@ export function createConnections(deps: Deps): ConnectionsApi {
       limit: {
         message: "O Meu Pluggy recusou este banco. Você pode ter até 5 bancos, todos no seu nome.",
         anchor: "limite-de-5-bancos",
+      },
+      connector: {
+        message: "O conector MeuPluggy não está habilitado na sua aplicação, ou a conta é só de testes (sandbox).",
+        anchor: "conector-nao-habilitado-ou-conta-so-de-sandbox",
       },
       offline: { message: "Sem internet. Conecte-se e tente de novo.", anchor: "sem-internet" },
       unexpected: { message: "Não deu para abrir o Meu Pluggy agora. Tente de novo.", anchor: "problemas-comuns" },
@@ -236,7 +251,7 @@ export function createConnections(deps: Deps): ConnectionsApi {
         return connectError("offline");
       }
       if (created.status === 401 || created.status >= 500) return connectError("unexpected");
-      if (created.status >= 400) return connectError("limit");
+      if (created.status >= 400) return connectError(isConnectorRefusal(await json(created)) ? "connector" : "limit");
       const itemId = ((await json(created)) as PluggyItem | null)?.id;
       if (!itemId) return connectError("unexpected");
 

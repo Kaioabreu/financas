@@ -58,6 +58,24 @@ describe("Conectar um banco: começo", () => {
     if (!result.ok) expect(result.error.helpUrl).toContain("#limite-de-5-bancos");
   });
 
+  it("conta só de sandbox ou conector não habilitado tem erro próprio, com o link do guia", async () => {
+    for (const message of ["Contas de teste só podem conectar conectores sandbox", "Connector not enabled for this application"]) {
+      const { core, fetch } = await worldWithCredentials();
+      fetch.on("POST", `${API}/items`, { status: 403, body: { message } });
+
+      const result = await core.startConnect();
+
+      expect(result).toMatchObject({ ok: false, error: { kind: "connector" } });
+      if (!result.ok) expect(result.error.helpUrl).toContain("#conector-nao-habilitado-ou-conta-so-de-sandbox");
+    }
+  });
+
+  it("recusa sem mensagem reconhecível continua sendo o limite de 5", async () => {
+    const { core, fetch } = await worldWithCredentials();
+    fetch.on("POST", `${API}/items`, { status: 400, body: {} });
+    expect(await core.startConnect()).toMatchObject({ ok: false, error: { kind: "limit" } });
+  });
+
   it("sem internet vira 'sem internet'", async () => {
     const { core, fetch } = await worldWithCredentials();
     fetch.goOffline();
