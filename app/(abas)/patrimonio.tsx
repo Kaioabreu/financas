@@ -87,8 +87,8 @@ export default function Patrimonio() {
                         style={{
                           width: 18,
                           height: Math.max(2, (BAR_H * Math.abs(p.total)) / peak),
-                          backgroundColor: p.today ? c.acc : c.ink2,
-                          opacity: p.today ? 1 : 0.5,
+                          backgroundColor: p.today ? c.acc : p.estimated ? c.rule : c.ink2,
+                          opacity: p.today || p.estimated ? 1 : 0.5,
                           borderRadius: 3,
                         }}
                       />
@@ -99,6 +99,9 @@ export default function Patrimonio() {
               })}
             </View>
 
+            {view.estimating.map((name) => (
+              <Fine key={name}>Estimando o histórico do {name}…</Fine>
+            ))}
             {old.map((b) => (
               <Fine key={b.itemId}>
                 {b.bankName}: valor de {ddmm(b.valueDate!)}

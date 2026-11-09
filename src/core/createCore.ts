@@ -7,6 +7,7 @@ import { account, appMeta, bankTransaction, bill, connection, identity, investme
 import { createClassification, type ClassificationApi } from "./classification";
 import { createConnections, type ConnectionsApi } from "./connections";
 import { createSync, type SyncApi } from "./sync";
+import { createEstimate } from "./estimate";
 import { createNetWorth, type NetWorthApi } from "./networth";
 import { createSummary, type SummaryApi } from "./summary";
 import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
@@ -185,7 +186,10 @@ export function createCore(deps: CoreDeps): Core {
 
   const networth = createNetWorth({ db, clock: deps.clock });
 
+  const estimate = createEstimate({ db, fetch: deps.fetch, clock: deps.clock });
+
   const sync = createSync({
+    estimate: estimate.run,
     takeSnapshot: networth.takeSnapshot,
     db,
     config,
