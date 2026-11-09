@@ -56,11 +56,15 @@ _Avoid_: diferença, furo, lançamento faltante
 Compra no cartão paga em parcelas. Tem uma natureza e uma categoria só, que valem para todas as suas parcelas.
 
 **Parcela**:
-Cada pagamento de uma compra parcelada. A parcela k é um gasto no mesmo dia da compra, k − 1 meses depois (no último dia do mês, se ele for mais curto), a não ser que tenha sido adiantada.
+Cada pagamento de uma compra parcelada. A parcela k é um gasto no mesmo dia da compra, k − 1 meses depois (no último dia do mês, se ele for mais curto), a não ser que tenha sido adiantada ou cancelada.
 
 **Parcela adiantada**:
 Parcela que o usuário pagou antes do seu mês, na fatura atual, em troca de um desconto. É um gasto no dia do adiantamento, e o desconto é um reembolso dela.
 _Avoid_: parcela antecipada
+
+**Parcela cancelada**:
+Parcela de uma compra parcelada cancelada que ainda não tinha chegado ao seu dia. É um gasto no dia do estorno, e o estorno é um reembolso que a anula.
+_Avoid_: parcela estornada
 
 **Regra**:
 Instrução do usuário que dá uma natureza e/ou uma categoria às transações cuja descrição contém um texto. Vale para as transações passadas e futuras, menos as editadas à mão.
