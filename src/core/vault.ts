@@ -7,10 +7,20 @@ export class CipherUnavailableError extends Error {
   }
 }
 
+/** The database file exists but the key does not open it. Nothing was changed. */
+export class UnreadableDatabaseError extends Error {
+  constructor() {
+    super("The database exists but the key does not open it.");
+    this.name = "UnreadableDatabaseError";
+  }
+}
+
 export interface RawDatabase {
   execute(sql: string): Promise<void>;
   /** Result of `PRAGMA cipher_version`; null or empty when SQLCipher is absent. */
   queryCipherVersion(): Promise<string | null>;
+  /** Whether the keyed database can be read (`SELECT count(*) FROM sqlite_master`). */
+  canRead(): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -39,11 +49,8 @@ function toHex(bytes: Uint8Array): string {
 }
 
 export async function openVault<Orm>(ports: VaultPorts<Orm>): Promise<Vault<Orm>> {
-  let keyHex = await ports.secureStore.get(KEY_NAME);
-  if (!keyHex) {
-    keyHex = toHex(ports.randomBytes(KEY_BYTES));
-    await ports.secureStore.set(KEY_NAME, keyHex);
-  }
+  const storedKey = await ports.secureStore.get(KEY_NAME);
+  const keyHex = storedKey ?? toHex(ports.randomBytes(KEY_BYTES));
 
   await ports.database.execute(`PRAGMA key = "x'${keyHex}'"`);
 
@@ -52,6 +59,13 @@ export async function openVault<Orm>(ports: VaultPorts<Orm>): Promise<Vault<Orm>
     await ports.database.close();
     throw new CipherUnavailableError();
   }
+
+  if (!(await ports.database.canRead())) {
+    // A new key is not saved: the old one may still turn up, and the user decides what happens to the file.
+    await ports.database.close();
+    throw new UnreadableDatabaseError();
+  }
+  if (!storedKey) await ports.secureStore.set(KEY_NAME, keyHex);
 
   const orm = ports.createOrm(ports.database);
   await ports.migrate(orm);

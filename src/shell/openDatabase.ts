@@ -28,8 +28,9 @@ export async function eraseLocalData() {
 /** The open database, for the Backup export (ATTACH + sqlcipher_export). */
 export let appSqlite: SQLiteDatabase | null = null;
 
+const databaseName = (Constants.expoConfig?.extra?.databaseName as string) ?? "finance.db";
+
 export async function openAppVault() {
-  const databaseName = (Constants.expoConfig?.extra?.databaseName as string) ?? "finance.db";
   const sqlite = await openDatabaseAsync(databaseName);
   appSqlite = sqlite;
   open = { sqlite, name: databaseName };
@@ -39,6 +40,14 @@ export async function openAppVault() {
     queryCipherVersion: async () => {
       const row = await sqlite.getFirstAsync<{ cipher_version?: string }>("PRAGMA cipher_version");
       return row?.cipher_version ?? null;
+    },
+    canRead: async () => {
+      try {
+        await sqlite.getFirstAsync("SELECT count(*) FROM sqlite_master");
+        return true;
+      } catch {
+        return false;
+      }
     },
     close: () => sqlite.closeAsync(),
   };

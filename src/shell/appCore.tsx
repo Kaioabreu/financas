@@ -6,6 +6,7 @@ import * as SecureStore from "expo-secure-store";
 import { createContext, useContext } from "react";
 import { embeddedConfig } from "../core/config";
 import { createCore, type Core } from "../core/createCore";
+import { restoreFilePort } from "./backupFile";
 
 type Orm = Parameters<typeof createCore>[0]["db"];
 
@@ -25,6 +26,7 @@ export function createAppCore(orm: unknown): Core {
       delete: () => SecureStore.deleteItemAsync(SECRET_KEY),
     },
     config: embeddedConfig,
+    restoreFile: restoreFilePort,
     // Typo guard only (the file's own cipher is the real protection): iterated SHA-256 over salt and password.
     passwordHash: async (password, salt) => {
       let digest = `${salt}:${password}`;

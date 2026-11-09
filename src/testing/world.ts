@@ -7,6 +7,7 @@ import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { migrate } from "drizzle-orm/sqlite-proxy/migrator";
 import { embeddedConfig, type EmbeddedConfig } from "../core/config";
 import { createCore, type Core } from "../core/createCore";
+import type { BackupFilePort } from "../core/restore";
 import * as schema from "../db/schema";
 
 export interface FakeResponse {
@@ -123,7 +124,7 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
   const clock = new FakeClock(Date.parse(options.startAt ?? "2026-11-09T12:00:00.000Z"));
   const secret = new FakeSecretStore();
   const network = { value: "wifi" as "wifi" | "cellular" | "offline" };
-  const build = (override: Partial<EmbeddedConfig> = {}): Core =>
+  const build = (override: Partial<EmbeddedConfig> = {}, restoreFile?: BackupFilePort): Core =>
     createCore({
       db: db as never,
       fetch: fake.fetch,
@@ -135,7 +136,8 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
       passwordHash: async (password, salt) => createHash("sha256").update(`${salt}:${password}`).digest("hex"),
       randomHex: (n) => randomBytes(n).toString("hex"),
       deviceHasLock: async () => options.deviceHasLock ?? true,
+      restoreFile,
       network: async () => network.value,
     });
-  return { core: build(), dumpMeta: async () => sqlite.prepare("select * from app_meta").all(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>) => build(config), fetch: fake, clock, secret, network };
+  return { core: build(), dumpMeta: async () => sqlite.prepare("select * from app_meta").all(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>, restoreFile?: BackupFilePort) => build(config, restoreFile), fetch: fake, clock, secret, network };
 }

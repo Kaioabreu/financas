@@ -13,6 +13,7 @@ import { createPerformance, type PerformanceApi } from "./performance";
 import { createSummary, type SummaryApi } from "./summary";
 import { createBills, type BillsApi } from "./bills";
 import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
+import { refuseInspection, type BackupFilePort, type RestoreInput, type RestoreResult } from "./restore";
 import { createLock, type LockApi } from "./lock";
 import { backupNotice, buildNotices, readSnoozes, REFUSED_KEY, snoozeKey, SNOOZE_MS, type NoticeQueue } from "./status";
 
@@ -42,6 +43,8 @@ export interface CoreDeps {
   passwordHash: (password: string, salt: string) => Promise<string>;
   /** `n` random bytes as hex, for the verifier's salt. */
   randomHex: (n: number) => string;
+  /** Reads and swaps in a Backup file (needs SQLCipher, so the shell supplies it). */
+  restoreFile?: BackupFilePort;
   /** The kind of network now; the fund quotas (~135 MB) download freely only on Wi-Fi. Defaults to Wi-Fi. */
   network?: () => Promise<"wifi" | "cellular" | "offline">;
 }
@@ -95,6 +98,13 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
   verifyBackupPassword(password: string): Promise<boolean>;
   /** Marks a Backup as just made ("Último backup"). */
   recordBackup(): Promise<void>;
+  /** True on the first opening (no credentials saved yet): the only time "Restaurar backup" exists. */
+  canRestore(): Promise<boolean>;
+  /**
+   * Restores a Backup over the empty first-opening database: checks the password and the version,
+   * checks the Client Secret against the Client ID that came in the backup, then replaces everything.
+   */
+  restoreBackup(input: RestoreInput): Promise<RestoreResult>;
   /**
    * "Apagar tudo", Pluggy half: tries DELETE /items/{id} on every Connection and carries on when one
    * fails. Returns how many failed (404, an item already gone, counts as erased). The shell then
@@ -146,7 +156,7 @@ export function createCore(deps: CoreDeps): Core {
     return (await readMeta(REFUSED_KEY)) === "1";
   }
 
-  function failure(kind: CredentialsErrorKind): SaveCredentialsResult {
+  function failure(kind: CredentialsErrorKind): { ok: false; error: CredentialsError } {
     const errors: Record<CredentialsErrorKind, { message: string; anchor: string }> = {
       missing: { message: "Preencha o Client ID e o Client Secret.", anchor: "problemas-comuns" },
       refused: {
@@ -322,6 +332,30 @@ export function createCore(deps: CoreDeps): Core {
       if (!stored) return false;
       const [salt, hash] = stored.split(":");
       return (await deps.passwordHash(password, salt!)) === hash;
+    },
+
+    async canRestore() {
+      return !(await this.credentialsStatus()).saved;
+    },
+
+    async restoreBackup({ uri, password, clientSecret }) {
+      const file = deps.restoreFile;
+      if (!file) throw new Error("Restore is not available.");
+      if (!(await this.canRestore())) {
+        return { ok: false, kind: "not-first-open", message: "Só dá para restaurar na primeira abertura. Apague tudo antes." };
+      }
+      const inspection = await file.inspect(uri, password);
+      const refusal = refuseInspection(inspection, file.appMigrations);
+      if (refusal) return refusal;
+      if (!inspection.ok) throw new Error("unreachable");
+      const secret = clientSecret.trim();
+      const auth = secret ? await authenticate({ clientId: inspection.clientId, clientSecret: secret }) : "missing";
+      if (typeof auth === "string") return { ok: false, kind: "credentials", error: failure(auth).error };
+      await file.replaceAll(uri, password);
+      await deps.secret.set(secret);
+      await db.delete(appMeta).where(eq(appMeta.key, REFUSED_KEY));
+      apiKey = { value: auth.apiKey, expiresAt: deps.clock() + config.apiKeyTtlMs };
+      return { ok: true };
     },
 
     async recordBackup() {
