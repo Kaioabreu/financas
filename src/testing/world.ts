@@ -1,6 +1,7 @@
 // The single test seam: the core, created over in-memory SQLite (same schema and
 // migrations as the app), a fake fetch routed by URL + method, and a controlled clock.
 import { fileURLToPath } from "node:url";
+import { createHash, randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { migrate } from "drizzle-orm/sqlite-proxy/migrator";
@@ -11,6 +12,8 @@ import * as schema from "../db/schema";
 export interface FakeResponse {
   status?: number;
   body?: unknown;
+  /** A raw body (text or stream) sent as is, not as JSON. */
+  raw?: BodyInit;
   headers?: Record<string, string>;
 }
 export interface RecordedCall {
@@ -58,8 +61,10 @@ export class FakeFetch {
   };
 }
 
-function jsonResponse({ status = 200, body = {}, headers = {} }: FakeResponse): Response {
+function jsonResponse({ status = 200, body = {}, raw, headers = {} }: FakeResponse): Response {
   if (body instanceof Uint8Array) return new Response(body as BodyInit, { status, headers: { "content-type": "application/zip", ...headers } });
+  if (status === 204) return new Response(null, { status, headers });
+  if (raw !== undefined) return new Response(raw, { status, headers });
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 }
 
@@ -127,8 +132,10 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
       sleep: async (ms) => clock.advance(ms),
       config: { ...embeddedConfig, ...options.config, ...override },
       env: options.env,
+      passwordHash: async (password, salt) => createHash("sha256").update(`${salt}:${password}`).digest("hex"),
+      randomHex: (n) => randomBytes(n).toString("hex"),
       deviceHasLock: async () => options.deviceHasLock ?? true,
       network: async () => network.value,
     });
-  return { core: build(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>) => build(config), fetch: fake, clock, secret, network };
+  return { core: build(), dumpMeta: async () => sqlite.prepare("select * from app_meta").all(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>) => build(config), fetch: fake, clock, secret, network };
 }

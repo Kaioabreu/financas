@@ -312,3 +312,86 @@ describe("Estimativa: fonte que falha", () => {
     expect(sgsCalls(w, 7478)).toHaveLength(2);
   });
 });
+
+describe("Estimativa: Tesouro Direto", () => {
+  const CKAN = "https://www.tesourotransparente.gov.br/ckan/api/3/action/package_show";
+  const CSV_URL = "https://www.tesourotransparente.gov.br/ckan/dataset/x/resource/y/download/precotaxatesourodireto.csv";
+  const HEADER = "Tipo Titulo;Data Vencimento;Data Base;Taxa Compra Manha;Taxa Venda Manha;PU Compra Manha;PU Venda Manha;PU Base Manha";
+  const row = (type: string, due: string, base: string, pu: string) => `${type};${due};${base};7,87;7,99;1,00;2,00;${pu}`;
+  const csv = (rows: string[]) => [HEADER, ...rows].join("\r\n") + "\r\n";
+  const serve = (w: Awaited<ReturnType<typeof world>>, raw: BodyInit) => {
+    w.fetch.on("GET", CKAN, { body: { success: true, result: { resources: [{ format: "PDF", url: "https://x/taxa.pdf" }, { format: "CSV", url: CSV_URL }] } } });
+    w.fetch.on("GET", CSV_URL, { raw });
+  };
+  const bond = (over: Record<string, unknown>) =>
+    cdb(1, BANK_A, { subtype: "TREASURY", name: "Tesouro IPCA+ 2035", balance: 3300, amountWithdrawal: 3300, amountOriginal: 3000, rateType: "IPCA", dueDate: "2035-05-15T00:00:00.000Z", purchaseDate: "2026-04-10T00:00:00.000Z", ...over });
+  const D = "15/05/2035";
+
+  it("casa o título pelo vencimento, o indexador e o cupom, e lê o PU Base Manha pelo nome da coluna", async () => {
+    const w = await world();
+    serve(
+      w,
+      csv([
+        row("Tesouro IPCA+", D, "06/11/2026", "1000,00"),
+        row("Tesouro IPCA+ com Juros Semestrais", D, "06/11/2026", "3300,00"),
+        row("Tesouro IPCA+ com Juros Semestrais", D, "30/10/2026", "3300,00"),
+        row("Tesouro IPCA+", D, "30/10/2026", "1000,00"),
+        row("Tesouro IPCA+ com Juros Semestrais", D, "31/07/2026", "3150,00"),
+        row("Tesouro IPCA+", D, "31/07/2026", "1000,00"),
+        row("Tesouro IPCA+ com Juros Semestrais", D, "10/04/2026", "3000,00"),
+        row("Tesouro IPCA+", D, "10/04/2026", "1000,00"),
+      ]),
+    );
+    await w.connect(newBank(BANK_A, "BTG", [idle(BANK_A)], { investments: [bond({ couponPayment: { hasCoupon: true } })] }));
+    const curve = await past(w);
+    expect(curve["2026-10"]).toEqual([3300, true]);
+    expect(curve["2026-07"]).toEqual([3150, true]); // 1 unit bought on 10/04 at 3000, price of 31/07
+    expect(curve["2026-03"]).toEqual([0, true]); // before the purchase
+    expect(w.fetch.calls.find((c) => c.url.startsWith(CKAN))!.url).toContain("id=taxas-dos-titulos-ofertados-pelo-tesouro-direto");
+  });
+
+  it("lê em fluxo e para ao cobrir os 12 meses", async () => {
+    const w = await world();
+    const lines = [
+      HEADER,
+      row("Tesouro IPCA+", D, "06/11/2026", "3300,00"),
+      row("Tesouro IPCA+", D, "30/10/2026", "3300,00"),
+      row("Tesouro IPCA+", D, "10/04/2026", "3000,00"),
+      row("Tesouro IPCA+", D, "01/11/2025", "2500,00"), // older than the 12 months
+      ...Array.from({ length: 50 }, (_, i) => row("Tesouro IPCA+", D, `01/10/${2025 - i}`, "100,00")),
+    ];
+    let pulled = 0;
+    const raw = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const line = lines[pulled++];
+        if (line === undefined) return controller.close();
+        controller.enqueue(Uint8Array.from(Buffer.from(line + "\r\n", "latin1")));
+      },
+    });
+    serve(w, raw);
+    await w.connect(newBank(BANK_A, "BTG", [idle(BANK_A)], { investments: [bond({})] }));
+    expect((await past(w))["2026-10"]).toEqual([3300, true]);
+    expect(pulled).toBeLessThan(10);
+  });
+
+  it("o título sem par no CSV fica na reta", async () => {
+    const w = await world();
+    serve(w, csv([row("Tesouro IPCA+", D, "06/11/2026", "3300,00")]));
+    // a fixed-rate bond (no rateType) of the same maturity has no pair
+    await w.connect(newBank(BANK_A, "BTG", [idle(BANK_A)], { investments: [bond({ rateType: null, purchaseDate: undefined, amountOriginal: null })] }));
+    const curve = await past(w);
+    expect(curve["2026-03"]).toEqual([3300, true]);
+    expect((await w.core.netWorth()).estimating).toEqual([]);
+  });
+
+  it("a fonte que segue falhando depois de 7 dias deixa o título na reta", async () => {
+    const w = await world(); // no route: 404
+    await w.connect(newBank(BANK_A, "BTG", [idle(BANK_A)], { investments: [bond({})] }));
+    expect((await w.core.netWorth()).estimating).toEqual(["MeuPluggy"]);
+    w.clock.advance(DAY * 7);
+    await w.sync();
+    expect((await w.core.netWorth()).estimating).toEqual([]);
+    expect((await past(w))["2026-10"]![0]).toBeGreaterThan(0);
+    expect(await w.core.diagnostic()).toContain("fonte que falhou Tesouro");
+  });
+});

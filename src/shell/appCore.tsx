@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import * as Crypto from "expo-crypto";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Network from "expo-network";
 import * as SecureStore from "expo-secure-store";
@@ -8,7 +9,7 @@ import { createCore, type Core } from "../core/createCore";
 
 type Orm = Parameters<typeof createCore>[0]["db"];
 
-const SECRET_KEY = "pluggy-client-secret";
+export const SECRET_KEY = "pluggy-client-secret";
 
 /** The running core, for the error screen (which renders outside the provider). */
 export let currentCore: Core | null = null;
@@ -24,6 +25,13 @@ export function createAppCore(orm: unknown): Core {
       delete: () => SecureStore.deleteItemAsync(SECRET_KEY),
     },
     config: embeddedConfig,
+    // Typo guard only (the file's own cipher is the real protection): iterated SHA-256 over salt and password.
+    passwordHash: async (password, salt) => {
+      let digest = `${salt}:${password}`;
+      for (let i = 0; i < 1000; i++) digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${salt}:${digest}`);
+      return digest;
+    },
+    randomHex: (n) => Array.from(Crypto.getRandomBytes(n), (b) => b.toString(16).padStart(2, "0")).join(""),
     deviceHasLock: async () => (await LocalAuthentication.getEnrolledLevelAsync()) !== LocalAuthentication.SecurityLevel.NONE,
     network: async () => {
       const state = await Network.getNetworkStateAsync().catch(() => null);

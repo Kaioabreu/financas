@@ -9,6 +9,7 @@ import { account, appMeta, bankTransaction, bill, connection, investment, invest
 import type { CoreDatabase } from "./createCore";
 import { createFundQuotas, normalizeCnpj, quotaPath, QuotaSourceError, type FundQuotas, type NetworkKind } from "./fundQuotas";
 import { classOfInvestment, localDay, type Line } from "./networth";
+import { loadTreasuryPrices, matchTreasury, treasuryPath, treasuryRef, type TreasuryPrices } from "./treasury";
 
 export const SGS_BASE = "https://api.bcb.gov.br/dados/serie";
 /** How long a pending estimate keeps retrying before it closes with the straight line. */
@@ -82,7 +83,7 @@ interface Indexing {
 }
 
 function indexingOf(inv: Investment, extra: any): Indexing | null {
-  if (inv.type !== "FIXED_INCOME" || inv.subtype === "TREASURY") return null; // Treasury prices: a later ticket
+  if (inv.type !== "FIXED_INCOME" || inv.subtype === "TREASURY") return null;
   if (!(num(inv.amountOriginal) > 0) || !startOf(extra)) return null;
   const type = String(extra.rateType ?? "").toUpperCase();
   const rate = num(extra.rate);
@@ -91,6 +92,17 @@ function indexingOf(inv: Investment, extra: any): Indexing | null {
   if (type.includes("IPCA")) return { kind: "ipca", rate: 0, spread: fixed || rate };
   if (type.includes("PRE")) return { kind: "pre", rate: 0, spread: fixed || rate };
   return null;
+}
+
+const isTreasury = (inv: Investment) => inv.type === "FIXED_INCOME" && inv.subtype === "TREASURY";
+
+/** The day-by-day value of a Treasury bond from the official prices, or null (straight line). */
+function treasuryOf(prices: TreasuryPrices, inv: Investment, extra: any, ops: Operation[], D: string, days: string[]) {
+  const ref = treasuryRef(inv, extra);
+  const series = ref && matchTreasury(prices, ref);
+  if (!series) return null;
+  const mine = ops.filter((o) => o.investmentId === inv.id).map((o) => ({ type: o.type ?? "", date: o.date, quantity: o.quantity })) as { type: string; date: string; quantity: number | null }[];
+  return treasuryPath(series, inv, extra, mine, num(extra.amountWithdrawal ?? inv.balance), D, days);
 }
 
 export function createEstimate(deps: Deps) {
@@ -205,6 +217,15 @@ export function createEstimate(deps: Deps) {
         throw error;
       }
     });
+    // Treasury bonds: the official price (a failure follows the same retry rule as the other sources)
+    let treasury: TreasuryPrices | null = null;
+    if (investments.some((i) => isTreasury(i) && treasuryRef(i, parse(i.extra)))) {
+      try {
+        treasury = await loadTreasuryPrices(deps.fetch, W, D);
+      } catch {
+        sources.failed = "Tesouro";
+      }
+    }
     current.failedSource = sources.failed;
     if (sources.failed && deps.clock() - current.startedAt < ESTIMATE_RETRY_MS) {
       await save(); // pending: tried again on the next sync
@@ -221,6 +242,8 @@ export function createEstimate(deps: Deps) {
     const assets = investments.map((inv) => {
       const extra = parse(inv.extra);
       const idx = indexings.get(inv.id);
+      const bond = treasury && isTreasury(inv) ? treasuryOf(treasury, inv, extra, ops, D, days) : null;
+      if (bond) return { cls: classOfInvestment(inv.type), values: bond };
       const cnpj = cnpjOf(inv);
       const fund = cnpj ? quotaPath(quotas.byCnpj.get(cnpj) ?? new Map(), num(extra.amountWithdrawal ?? inv.balance), fundPosition(inv, extra, ops.filter((o) => o.investmentId === inv.id)), D, days) : null;
       if (fund) return { cls: classOfInvestment(inv.type), values: fund };

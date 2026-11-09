@@ -1,16 +1,38 @@
 import Constants from "expo-constants";
 import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
-import { openDatabaseAsync } from "expo-sqlite";
+import { deleteDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 import { drizzle } from "drizzle-orm/expo-sqlite";
 import { migrate } from "drizzle-orm/expo-sqlite/migrator";
 import migrations from "../../drizzle/migrations";
-import { openVault, type RawDatabase } from "../core/vault";
+import { KEY_NAME, openVault, type RawDatabase } from "../core/vault";
 import * as schema from "../db/schema";
+import { SECRET_KEY } from "./appCore";
+
+let open: { sqlite: SQLiteDatabase; name: string } | null = null;
+
+/**
+ * "Apagar tudo", local half: closes and deletes the database, and clears the SecureStore (database
+ * key and Client Secret). The temporary backup file needs no cleanup here: shareBackup deletes it as soon as the share sheet closes.
+ */
+export async function eraseLocalData() {
+  if (open) {
+    await open.sqlite.closeAsync().catch(() => {});
+    await deleteDatabaseAsync(open.name).catch(() => {});
+    open = null;
+  }
+  await SecureStore.deleteItemAsync(KEY_NAME).catch(() => {});
+  await SecureStore.deleteItemAsync(SECRET_KEY).catch(() => {});
+}
+
+/** The open database, for the Backup export (ATTACH + sqlcipher_export). */
+export let appSqlite: SQLiteDatabase | null = null;
 
 export async function openAppVault() {
   const databaseName = (Constants.expoConfig?.extra?.databaseName as string) ?? "finance.db";
   const sqlite = await openDatabaseAsync(databaseName);
+  appSqlite = sqlite;
+  open = { sqlite, name: databaseName };
 
   const database: RawDatabase = {
     execute: (sql) => sqlite.execAsync(sql),
