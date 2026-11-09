@@ -26,7 +26,7 @@ const config: ExpoConfig = {
   },
   plugins: ["expo-router", "expo-secure-store", ["expo-sqlite", { useSQLCipher: true }]],
   experiments: { typedRoutes: true },
-  extra: { databaseName: variant.databaseName },
+  extra: { databaseName: variant.databaseName, eas: { projectId: "2397abc9-98ec-4e75-ab8f-9a6d25bf72c0" } },
 };
 
 export default config;
