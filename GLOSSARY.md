@@ -8,6 +8,14 @@ App pessoal de acompanhamento financeiro alimentado pelo Open Finance. Cada pess
 Pessoa que instala o app e vê somente as próprias finanças, conectadas através da própria conta no Meu Pluggy.
 _Avoid_: cliente, conta (reservado para conta bancária)
 
+**Aplicação**:
+O cadastro que o usuário cria no Dashboard da Pluggy e de onde saem as credenciais dele. Uma só serve para todos os bancos.
+_Avoid_: app, aplicativo (reservados para o Finanças)
+
+**Credenciais**:
+O Client ID e o Client Secret da aplicação do usuário. Quem tem o Client Secret lê todos os dados financeiros dele.
+_Avoid_: chaves, token, senha
+
 **Conexão**:
 A autorização que o usuário dá no Meu Pluggy para o app ler os dados de um banco dele. Vence em 1 ano; renová-la exige um novo login do usuário e não muda os dados já lidos.
 _Avoid_: item, vínculo
