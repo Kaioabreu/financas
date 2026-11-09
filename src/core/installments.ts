@@ -65,7 +65,7 @@ const storeOf = (text: string) =>
     .trim();
 const cents = (v: number) => Math.round(Math.abs(v) * 100);
 
-function addMonths(isoDay: string, months: number): string {
+export function addMonths(isoDay: string, months: number): string {
   const [y, m, d] = isoDay.split("-").map(Number) as [number, number, number];
   const first = new Date(Date.UTC(y, m - 1 + months, 1));
   const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();

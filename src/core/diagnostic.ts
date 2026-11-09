@@ -51,6 +51,8 @@ interface DiagnosticData {
   facts: Facts;
   connections: ConnectionRow[];
   credentialsRefused: boolean;
+  /** Bill check counts of the cards of banks outside the validated list. Counts only. */
+  billCounts: { verified: number; matching: number; mismatching: number }[];
 }
 
 /** A section turns the allowed data into lines. Add one here to grow the text. */
@@ -77,6 +79,8 @@ const SECTIONS: Section[] = [
         estimateLine(c.estimate),
       ];
     }),
+  ({ billCounts }) =>
+    billCounts.map((c, i) => `Cartão ${i + 1}: faturas verificadas ${c.verified} · batem ${c.matching} · não batem ${c.mismatching}`),
   ({ facts }) => {
     const f = facts.failure;
     if (!f) return ["Última falha local: nenhuma"];
@@ -141,6 +145,7 @@ export function createDiagnostics(deps: {
   env: DiagnosticEnv;
   states: () => Promise<{ itemId: string; state: string; cause: string | null }[]>;
   credentialsRefused: () => Promise<boolean>;
+  billCounts: () => Promise<{ verified: number; matching: number; mismatching: number }[]>;
 }): Diagnostics {
   const { db } = deps;
   let queue: Promise<unknown> = Promise.resolve();
@@ -193,7 +198,7 @@ export function createDiagnostics(deps: {
         lockPercent: r.lockTriggered ? (facts.locks[r.itemId] ?? null) : null,
         estimate: r.estimate ? (JSON.parse(r.estimate) as EstimateState) : null,
       }));
-      const data: DiagnosticData = { env: deps.env, facts, connections, credentialsRefused: await deps.credentialsRefused() };
+      const data: DiagnosticData = { env: deps.env, facts, connections, credentialsRefused: await deps.credentialsRefused(), billCounts: await deps.billCounts() };
       return ["Diagnóstico do Finanças", ...SECTIONS.flatMap((section) => section(data))].join("\n");
     },
   };

@@ -1,6 +1,7 @@
 // The single test seam: the core, created over in-memory SQLite (same schema and
 // migrations as the app), a fake fetch routed by URL + method, and a controlled clock.
 import { fileURLToPath } from "node:url";
+import { createHash, randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { migrate } from "drizzle-orm/sqlite-proxy/migrator";
@@ -128,7 +129,9 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
       sleep: async (ms) => clock.advance(ms),
       config: { ...embeddedConfig, ...options.config, ...override },
       env: options.env,
+      passwordHash: async (password, salt) => createHash("sha256").update(`${salt}:${password}`).digest("hex"),
+      randomHex: (n) => randomBytes(n).toString("hex"),
       deviceHasLock: async () => options.deviceHasLock ?? true,
     });
-  return { core: build(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>) => build(config), fetch: fake, clock, secret };
+  return { core: build(), dumpMeta: async () => sqlite.prepare("select * from app_meta").all(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>) => build(config), fetch: fake, clock, secret };
 }
