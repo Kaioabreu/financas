@@ -243,3 +243,18 @@ describe("Patrimônio: pode faltar", () => {
     expect((await w.core.netWorth()).banks[0]).toMatchObject({ mayBeMissing: false, valueDate: null });
   });
 });
+
+describe("Patrimônio: dívida de cartão, casos de borda", () => {
+  const card = () => creditCard({ balance: 9999 } as never);
+
+  it("fatura vencida com payments: [] não é dívida; compra de fatura desconhecida também não", async () => {
+    const w = await world();
+    await w.read({
+      accounts: [bank(1000), card()],
+      bills: [bill({ id: "b-old", totalAmount: 100, dueDate: "2026-10-05T00:00:00.000Z", payments: [] } as never)],
+      txs: [buy(1, 100, "2026-09-20T12:00:00.000Z", "b-old"), buy(2, 70, "2026-11-02T12:00:00.000Z", "b-nao-lida")],
+    });
+
+    expect((await w.core.netWorth()).debt).toBe(0);
+  });
+});
