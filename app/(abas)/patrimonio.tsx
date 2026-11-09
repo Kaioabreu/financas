@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AssetClass, NetWorthView } from "../../src/core/networth";
+import type { PerformancePeriod, PerformanceView } from "../../src/core/performance";
 import { useCore } from "../../src/shell/appCore";
 import { money, moneyRound, signedMoney } from "../../src/shell/format";
 import { Body, Fine, font, usePalette } from "../../src/shell/theme";
@@ -21,6 +22,7 @@ export default function Patrimonio() {
   const c = usePalette();
   const insets = useSafeAreaInsets();
   const [view, setView] = useState<NetWorthView | null>(null);
+  const [perf, setPerf] = useState<PerformanceView | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -30,6 +32,20 @@ export default function Patrimonio() {
     };
     void load();
     const timer = setInterval(load, 3000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [core]);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      const p = await core.performance();
+      if (alive) setPerf(p);
+    };
+    void load();
+    const timer = setInterval(load, 30000);
     return () => {
       alive = false;
       clearInterval(timer);
@@ -99,6 +115,18 @@ export default function Patrimonio() {
               })}
             </View>
 
+            {perf ? (
+              <>
+                <Text style={{ fontFamily: font.semibold, fontSize: 16, color: c.ink, marginTop: 28 }}>Rentabilidade</Text>
+                <Line label="Aporte líquido no mês" value={signedMoney(perf.month.netContribution)} />
+                <Line label="Valorização no mês" value={perf.month.appreciation === null ? "—" : signedMoney(perf.month.appreciation)} />
+                <Line label={`Rentabilidade no mês${perf.month.estimated ? " (estimada)" : ""}`} value={pct(perf.month)} />
+                <Line label="CDI no mês" value={pctValue(perf.month.cdi)} />
+                <Line label={`Rentabilidade no ano${perf.year.estimated ? " (estimada)" : ""}`} value={pct(perf.year)} />
+                <Line label="CDI no ano" value={pctValue(perf.year.cdi)} />
+              </>
+            ) : null}
+
             {view.estimating.map((name) => (
               <Fine key={name}>Estimando o histórico do {name}…</Fine>
             ))}
@@ -121,6 +149,9 @@ export default function Patrimonio() {
     </View>
   );
 }
+
+const pctValue = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(2).replace(".", ",")}%`);
+const pct = (p: PerformancePeriod) => pctValue(p.rentability);
 
 function Line({ dot, label, value, negative }: { dot?: string; label: string; value: string; negative?: boolean }) {
   const c = usePalette();
