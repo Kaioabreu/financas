@@ -23,13 +23,13 @@ const bankTx = (n: number, overrides: Record<string, unknown> = {}) =>
 
 async function world() {
   const w = await createTestWorld();
-  const state = { bank: [] as object[] };
+  const state = { bank: [] as object[], card: [] as object[] };
   w.fetch.on("POST", `${API}/auth`, { body: authResponse() });
   await w.core.saveCredentials({ clientId: SYNTHETIC_CLIENT_ID, clientSecret: SYNTHETIC_CLIENT_SECRET });
   w.fetch.on("GET", `${API}/items/${ITEM_ID}`, () => ({ body: item() }));
   w.fetch.on("GET", `${API}/accounts`, { body: page([account(), creditCard()]) });
   w.fetch.on("GET", `${API}/v2/transactions`, (call) => ({
-    body: { results: call.url.includes(`accountId=${CARD}`) ? [] : state.bank, next: null },
+    body: { results: call.url.includes(`accountId=${CARD}`) ? state.card : state.bank, next: null },
   }));
   w.fetch.on("GET", `${API}/bills`, { body: page([]) });
   w.fetch.on("GET", `${API}/investments`, { body: page([]) });
@@ -42,8 +42,9 @@ async function world() {
   return {
     ...w,
     rows,
-    async read(bank: object[]) {
+    async read(bank: object[], card: object[] = []) {
       state.bank = bank;
+      state.card = card;
       await w.core.readConnection(ITEM_ID);
       return rows();
     },
@@ -139,6 +140,26 @@ describe("Regras do usuário", () => {
     await w.core.deleteRule(user[0]!.id);
     expect((await w.core.listRules()).user).toEqual([]);
     expect((await w.rows()).LOJA.source).toBe("pluggy");
+  });
+});
+
+describe("Regras: contagem da prévia", () => {
+  it("não conta transações cobertas por edição de grupo de parcelas", async () => {
+    const w = await world();
+    const parcela = (n: number, k: number) =>
+      bankTx(n, {
+        accountId: CARD,
+        type: "DEBIT",
+        description: "MAGAZINE LUIZA",
+        amount: 100,
+        creditCardMetadata: { installmentNumber: k, totalInstallments: 2, totalAmount: 200, purchaseDate: "2026-10-01T12:00:00.000Z", billId: "b1" },
+      });
+    await w.read([bankTx(1, { description: "MAGAZINE LUIZA PIX" })], [parcela(2, 1), parcela(3, 2)]);
+    expect(await w.core.previewRule({ contains: "magazine", category: "shopping" })).toEqual({ count: 3 });
+
+    await w.core.editTransaction(`44444444-0000-0000-0000-${String(2).padStart(12, "0")}`, { nature: "expense", category: "leisure" });
+
+    expect(await w.core.previewRule({ contains: "magazine", category: "shopping" })).toEqual({ count: 1 });
   });
 });
 

@@ -5,6 +5,7 @@ import { and, desc, eq, lte } from "drizzle-orm";
 import { account, bankTransaction, bill, connection, investment, snapshot } from "../db/schema";
 import { isExpired } from "./connections";
 import type { CoreDatabase } from "./createCore";
+import { billKnown, billPaidOn } from "./billPaid";
 import { buildInstallmentPlan } from "./installments";
 
 export type AssetClass = "cash" | "fixedIncome" | "equity" | "funds" | "other";
@@ -77,6 +78,15 @@ export function localDay(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Every stored Retrato, its payload unpacked. Shared by the Patrimônio and the Desempenho. */
+export async function readSnapshots(db: CoreDatabase) {
+  return (await db.select().from(snapshot)).map((r) => ({
+    date: r.date,
+    itemId: r.itemId,
+    ...(parse(r.payload) as { lines?: Line[]; unavailable?: boolean; estimated?: boolean }),
+  }));
+}
+
 export function classOfInvestment(type: string | null): AssetClass {
   switch (type) {
     case "FIXED_INCOME":
@@ -125,22 +135,13 @@ export function createNetWorth(deps: Deps) {
   /** Card purchases already posted (date up to today) whose bill is not paid yet, net of credits. */
   async function cardDebt(accountId: string, today: string): Promise<number> {
     const bills = await db.select().from(bill).where(eq(bill.accountId, accountId));
-    const paid = new Set<string>();
-    for (const b of bills) {
-      const payments = parse(b.extra).payments;
-      if (Array.isArray(payments)) {
-        const sum = payments.reduce((s: number, p: any) => s + num(p?.amount), 0);
-        if (sum > 0 && sum >= num(b.totalAmount) - 0.005) paid.add(b.id);
-      } else if (b.dueDate.slice(0, 10) < today) {
-        paid.add(b.id); // Pluggy did not report payments: a bill past its due date is taken as paid
-      }
-    }
     const plan = await buildInstallmentPlan(db);
     let owed = 0;
     for (const t of await db.select().from(bankTransaction).where(eq(bankTransaction.accountId, accountId))) {
       if (plan.dateOf(t.id, t.date) > today) continue;
       const billId = plan.byId.get(t.id)?.billId ?? parse(t.extra).creditCardMetadata?.billId;
-      if (billId && paid.has(billId)) continue;
+      if (!billKnown(billId, bills)) continue; // a bill the app never stored is not owed by default
+      if (billId && bills.some((b) => b.id === billId && billPaidOn(b, today, true))) continue;
       const amount = t.amountInAccountCurrency ?? t.amount;
       const credit = t.type ? t.type === "CREDIT" : amount < 0;
       owed += credit ? -Math.abs(amount) : Math.abs(amount);
@@ -148,13 +149,7 @@ export function createNetWorth(deps: Deps) {
     return Math.max(0, owed);
   }
 
-  async function allSnapshots() {
-    return (await db.select().from(snapshot)).map((r) => ({
-      date: r.date,
-      itemId: r.itemId,
-      ...(parse(r.payload) as { lines?: Line[]; unavailable?: boolean; estimated?: boolean }),
-    }));
-  }
+  const allSnapshots = () => readSnapshots(db);
 
   return {
     /** Writes the Retrato of one Connection for today; a later one the same day replaces it. */

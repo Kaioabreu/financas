@@ -6,6 +6,7 @@
 // last estimated day meets the position of the first read.
 import { eq, inArray } from "drizzle-orm";
 import { account, appMeta, bankTransaction, bill, connection, investment, investmentTransaction, snapshot } from "../db/schema";
+import { billKnown, billPaidOn } from "./billPaid";
 import type { CoreDatabase } from "./createCore";
 import { createFundQuotas, normalizeCnpj, quotaPath, QuotaSourceError, type FundQuotas, type NetworkKind } from "./fundQuotas";
 import { classOfInvestment, localDay, type Line } from "./networth";
@@ -344,21 +345,15 @@ function debtPath(accounts: Account[], bills: Bill[], txs: Tx[], days: string[])
   const out: Record<string, number> = Object.fromEntries(days.map((d) => [d, 0]));
   for (const a of accounts) {
     if (a.type !== "CREDIT") continue;
-    const paidAt = new Map<string, string>();
-    for (const b of bills.filter((x) => x.accountId === a.id)) {
-      const payments = parse(b.extra).payments;
-      if (Array.isArray(payments)) {
-        const sum = payments.reduce((s: number, p: any) => s + num(p?.amount), 0);
-        if (sum > 0 && sum >= num(b.totalAmount) - 0.005) paidAt.set(b.id, b.dueDate.slice(0, 10));
-      } else paidAt.set(b.id, b.dueDate.slice(0, 10));
-    }
+    const myBills = bills.filter((x) => x.accountId === a.id);
     const mine = txs.filter((t) => t.accountId === a.id);
     for (const day of days) {
       let owed = 0;
       for (const t of mine) {
         if (t.date.slice(0, 10) > day) continue;
         const billId = parse(t.extra).creditCardMetadata?.billId;
-        if (billId && (paidAt.get(billId) ?? "9999") <= day) continue;
+        if (!billKnown(billId, myBills)) continue; // a bill the app never stored is not owed by default
+        if (billId && myBills.some((b) => b.id === billId && billPaidOn(b, day))) continue;
         owed -= effect(t); // a charge (a debit) adds to the debt
       }
       out[day] = out[day]! - Math.max(0, owed);

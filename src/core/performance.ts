@@ -3,9 +3,9 @@
 // Rentabilidade = (valorização + proventos e juros paid) / what was invested at the start.
 // The values come from the Retratos; a period touching an estimated Retrato is marked estimated.
 import { eq } from "drizzle-orm";
-import { appMeta, snapshot } from "../db/schema";
+import { appMeta } from "../db/schema";
 import type { CoreDatabase } from "./createCore";
-import { localDay, type Line } from "./networth";
+import { localDay, readSnapshots, type Line } from "./networth";
 import type { MonthSummary } from "./summary";
 
 const SGS_BASE = "https://api.bcb.gov.br/dados/serie";
@@ -93,9 +93,7 @@ export function createPerformance(deps: Deps): PerformanceApi {
     }
   }
 
-  async function snapshots() {
-    return (await db.select().from(snapshot)).map((r) => ({ date: r.date, itemId: r.itemId, ...(parse(r.payload) as { lines?: Line[]; estimated?: boolean }) }));
-  }
+  const snapshots = () => readSnapshots(db);
   type Snap = Awaited<ReturnType<typeof snapshots>>[number];
 
   /** The carteira (no caixa, no debt) as the last Retrato of each Connection up to `date` tells it. */

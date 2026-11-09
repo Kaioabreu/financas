@@ -382,7 +382,14 @@ export function createClassification(deps: ClassificationDeps) {
       if (!contains) return { count: 0 };
       const edited = new Set((await db.select().from(manualEdit)).map((e) => e.transactionId));
       const rows = await db.select().from(bankTransaction);
-      return { count: rows.filter((t) => !edited.has(t.id) && ruleCatches(contains, t.description)).length };
+      // Installments covered by a group edit stay as the user set them, just like an edited transaction.
+      const plan = await buildInstallmentPlan(db);
+      const groupEdited = new Set((await db.select().from(installmentEdit)).map((e) => e.groupKey));
+      const covered = (id: string) => {
+        const key = plan.byId.get(id)?.installment?.groupKey;
+        return key !== undefined && groupEdited.has(key);
+      };
+      return { count: rows.filter((t) => !edited.has(t.id) && !covered(t.id) && ruleCatches(contains, t.description)).length };
     },
 
     async addRule(rule: RuleInput): Promise<RuleResult> {
