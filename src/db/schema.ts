@@ -24,6 +24,12 @@ export const connection = sqliteTable("connection", {
   productDates: text("product_dates"),
   /** The oldest of the product dates: "Dados de <data>". */
   dataAt: text("data_at"),
+  /** Why only a new login helps: "login-error" | "not-found". Null otherwise. */
+  reconnectReason: text("reconnect_reason"),
+  /** What the item said at the last check: status, executionStatus and lastUpdatedAt. */
+  pluggyStatus: text("pluggy_status"),
+  pluggyExecution: text("pluggy_execution"),
+  pluggyUpdatedAt: text("pluggy_updated_at"),
 });
 
 /** Bank accounts and credit cards, as Pluggy sent them (Pluggy ids). */

@@ -27,8 +27,8 @@ async function world() {
   w.fetch.on("POST", `${API}/auth`, { body: authResponse() });
   await w.core.saveCredentials({ clientId: SYNTHETIC_CLIENT_ID, clientSecret: SYNTHETIC_CLIENT_SECRET });
   const state = { accounts: [account(), creditCard()] as object[], items: new Map<string, object>() };
-  state.items.set(OLD_ITEM, item());
-  state.items.set(NEW_ITEM, item({ id: NEW_ITEM, consentExpiresAt: "2027-11-09T12:00:00.000Z" }));
+  state.items.set(OLD_ITEM, item({ lastUpdatedAt: "2026-11-09T06:00:00.000Z" }));
+  state.items.set(NEW_ITEM, item({ id: NEW_ITEM, lastUpdatedAt: "2026-11-09T06:00:00.000Z", consentExpiresAt: "2027-11-09T12:00:00.000Z" }));
   for (const id of [OLD_ITEM, NEW_ITEM]) {
     w.fetch.on("GET", `${API}/items/${id}`, () => ({ body: state.items.get(id) }));
     w.fetch.on("DELETE", `${API}/items/${id}`, { body: {} });
@@ -81,10 +81,11 @@ describe("Renovação: o banco é reconhecido pelos ids das contas", () => {
 describe("Vencimento", () => {
   it("a 30 dias do consentExpiresAt a Conexão mostra 'vence em N dias'", async () => {
     const w = await world();
-    w.state.items.set(OLD_ITEM, item());
     // consent expires 2027-01-10T12:00; today is 2026-11-09T12:00 -> 62 days
     expect((await w.core.listConnections())[0]).toMatchObject({ state: "ok", daysLeft: 62 });
     w.clock.advance(40 * DAY);
+    w.state.items.set(OLD_ITEM, item({ lastUpdatedAt: "2026-12-19T06:00:00.000Z" }));
+    await w.core.sync({ manual: true });
     expect((await w.core.listConnections())[0]).toMatchObject({ state: "expiring", daysLeft: 22 });
   });
 
@@ -98,7 +99,7 @@ describe("Vencimento", () => {
     await w.core.sync({ manual: true });
     await w.core.readConnection(OLD_ITEM);
 
-    expect((await w.core.listConnections())[0]).toMatchObject({ state: "expired" });
+    expect((await w.core.listConnections())[0]).toMatchObject({ state: "reconnect", status: { cause: "A conexão venceu" } });
     expect(w.fetch.calls.slice(before).filter((c) => c.url.includes("/accounts") || c.url.includes("/transactions"))).toHaveLength(0);
     expect(await w.core.listTransactions({ accountId: BANK, month: "2026-10" })).toHaveLength(1);
   });

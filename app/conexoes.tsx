@@ -1,12 +1,15 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import type { AccountSummary, ConnectionSummary } from "../src/core/connections";
 import { useCore } from "../src/shell/appCore";
 import { expiryText, readTime, stateLabel } from "../src/shell/connectionLabels";
-import { Body, Button, Fine, font, Screen, usePalette } from "../src/shell/theme";
+import { embeddedConfig } from "../src/core/config";
+import { CopyDiagnostic } from "../src/shell/CopyDiagnostic";
+import { Body, Button, Fine, font, LinkText, Screen, usePalette } from "../src/shell/theme";
 
 const LIMIT = 5;
+const MEU_PLUGGY_URL = "https://meu.pluggy.ai";
 
 export default function Conexoes() {
   const core = useCore();
@@ -63,12 +66,25 @@ export default function Conexoes() {
               <Pressable onPress={() => setOpen(expanded ? null : conn.itemId)} accessibilityRole="button">
                 <Text style={{ fontFamily: font.semibold, fontSize: 17, color: c.ink }}>{conn.bankName}</Text>
                 <Text style={{ fontFamily: font.medium, fontSize: 14, color: label.attention ? c.neg : c.ink2 }}>{label.text}</Text>
+                {conn.status ? <Fine>{conn.status.headline} · {conn.status.cause}</Fine> : null}
                 <Fine>Dados de {data}</Fine>
               </Pressable>
               {expanded ? (
                 <View style={{ marginTop: 12, gap: 10 }}>
-                  {conn.state === "expired" ? (
-                    <Fine>A conexão venceu e o app parou de ler este banco. Seus dados continuam aqui; um novo login traz o banco de volta.</Fine>
+                  {conn.status ? (
+                    <View style={{ gap: 8 }}>
+                      <Text style={{ fontFamily: font.medium, fontSize: 15, color: c.neg }}>{conn.status.headline}</Text>
+                      <Fine>{conn.status.cause}. Seus dados continuam aqui.</Fine>
+                      {conn.status.primaryAction === "reconnect" ? <Button label="Reconectar" onPress={() => router.push("/conectar")} /> : null}
+                      {conn.status.primaryAction === "open-meu-pluggy" ? (
+                        <Button label="Abrir o Meu Pluggy" onPress={() => Linking.openURL(MEU_PLUGGY_URL)} />
+                      ) : null}
+                      {conn.status.secondaryAction === "reconnect" ? (
+                        <Button label="Reconectar" secondary onPress={() => router.push("/conectar")} />
+                      ) : null}
+                      <LinkText onPress={() => Linking.openURL(`${embeddedConfig.guideUrl}#problemas-comuns`)}>Problemas comuns</LinkText>
+                      <CopyDiagnostic />
+                    </View>
                   ) : null}
                   {conn.state === "expiring" ? (
                     <Fine>A autorização vence em breve. Renovar é fazer login de novo no Meu Pluggy; os dados já lidos não mudam.</Fine>
@@ -76,7 +92,9 @@ export default function Conexoes() {
                   <Fact label="Dados de" value={data} />
                   <Fact label="O que vem" value={names.length ? names.join(", ") : "—"} />
                   <Fact label="Autorização" value={expiryText(conn)} />
-                  <Button label="Renovar" secondary={conn.state === "ok" || conn.state === "reading"} onPress={() => router.push("/conectar")} />
+                  {conn.state !== "reconnect" ? (
+                    <Button label="Renovar" secondary={conn.state !== "expiring"} onPress={() => router.push("/conectar")} />
+                  ) : null}
                   <Button label="Remover" secondary onPress={() => confirmRemove(conn)} />
                   <Fine>Renovar abre o Meu Pluggy para um novo login e dá mais 1 ano. Os dados já lidos não mudam.</Fine>
                 </View>
