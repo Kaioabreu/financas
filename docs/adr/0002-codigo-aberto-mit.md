@@ -12,7 +12,7 @@ O repositório é público e usa a licença MIT. Isso não é vitrine, é condi�
 
 - **Tudo nasce público**: commits, branches `research/*` e `prototype/*`, issues e o histórico de edição delas. A regra "dados financeiros reais nunca entram no repo" passou a valer também para issues e comentários.
 - **Não fechar o repositório**: voltar a privado tira dos amigos a condição de uso pessoal.
-- **Commits usam o e-mail noreply do GitHub**. O histórico foi reescrito antes de abrir. Três commits antigos continuam alcançáveis pelos links "referenced this issue" nas issues #8, #9 e #12, com o e-mail pessoal do autor. Remover esses links exige pedir ao GitHub Support.
+- **Commits usam o e-mail noreply do GitHub**. O histórico foi reescrito antes de abrir, mas o GitHub ainda serve pelo SHA os 11 commits antigos, que trazem o e-mail pessoal do autor. Três deles têm link público, no evento "referenced this issue" das issues #8, #9 e #12. Os outros só abrem para quem souber o SHA. Remover esses commits exige pedir ao GitHub Support.
 - **A loja ainda está pendente**: a Pluggy não confirmou se a publicação em loja com o código aberto conta como uso pessoal.
 
 Decidido em [Qual licença o app usa, e quando o repositório fica público?](https://github.com/Kaioabreu/financas/issues/15), a partir da resposta registrada em [Perguntar à Pluggy se o modelo "traga suas credenciais" conta como uso pessoal](https://github.com/Kaioabreu/financas/issues/13).
