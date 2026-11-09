@@ -1,10 +1,10 @@
 // Core: classification. A pure function of the raw Pluggy fields, the user's CPF, the holder's
 // Identity and the embedded configuration. It is recomputed on every read and never stored,
 // so an OTA update of the built-in rules reclassifies everything without reading Pluggy again.
-// (User rules and manual edits join the precedence in ticket #30.)
-import { eq } from "drizzle-orm";
-import { account, appMeta, bankTransaction, identity } from "../db/schema";
-import type { EmbeddedConfig } from "./config";
+// Precedence: manual edit > user rule > built-in rule > deduction > Pluggy's category > Outros.
+import { eq, inArray } from "drizzle-orm";
+import { account, appMeta, bankTransaction, identity, manualEdit, userRule } from "../db/schema";
+import type { BuiltInRule, EmbeddedConfig } from "./config";
 import type { CoreDatabase } from "./createCore";
 
 export type Nature =
@@ -38,6 +38,25 @@ export interface Classification {
   origin?: IncomeOrigin;
 }
 
+/** Where a classification came from: Pluggy (or the app's deduction), a rule, or a manual edit. */
+export type ClassificationSource = "pluggy" | "rule" | "manual";
+export type ClassifiedAs = Classification & { source: ClassificationSource };
+
+/** What a rule gives the transactions it matches. At least one of the three. */
+export interface RuleOutcome {
+  nature?: Nature;
+  category?: AppCategory;
+  origin?: IncomeOrigin;
+}
+export interface RuleInput extends RuleOutcome {
+  /** The text the description must contain (case and accents ignored). */
+  contains: string;
+}
+export interface UserRule extends RuleInput {
+  id: number;
+}
+export type RuleResult = { ok: true } | { ok: false; message: string };
+
 export type CpfStatus =
   | { state: "known"; cpf: string; source: "identity" | "manual" }
   | { state: "needed"; reason: "missing" | "conflict" };
@@ -47,6 +66,19 @@ export interface ClassificationApi {
   /** The CPF from the Connections' /identity; asks by hand only when none brings it or they disagree. */
   cpfStatus(): Promise<CpfStatus>;
   setCpf(cpf: string): Promise<SetCpfResult>;
+  /** Sets the classification of one transaction by hand; it then wins over every rule. */
+  editTransaction(id: string, classification: Classification): Promise<void>;
+  /** How many transactions the rule would catch: the ones not edited by hand. */
+  previewRule(rule: RuleInput): Promise<{ count: number }>;
+  addRule(rule: RuleInput): Promise<RuleResult>;
+  deleteRule(id: number): Promise<void>;
+  /** The user's rules (newest first) and the app's, which are read-only. */
+  listRules(): Promise<{ user: UserRule[]; builtIn: BuiltInRule[] }>;
+  /**
+   * Called right after a read: a hand-edited transaction that vanished moves to the one that
+   * appeared in its place (same account, amount and description; date up to 5 days later).
+   */
+  moveEdits(newIds: string[]): Promise<void>;
 }
 
 /** Lower case, no accents: how rule texts and descriptions are compared. */
@@ -87,6 +119,9 @@ interface Context {
   employerDocs: Set<string>;
   /** Account debits that paid a card bill in the app. */
   matchedBillPayments: Set<string>;
+  /** Newest first. */
+  userRules: UserRule[];
+  edits: Map<string, Classification>;
 }
 
 const isCredit = (r: Row) => (r.type ? r.type === "CREDIT" : r.card ? r.amount < 0 : r.amount > 0);
@@ -114,13 +149,37 @@ function isBillPaymentSignal(r: Row): boolean {
   return normalizeText(r.category ?? "") === "credit card payment" || r.operationType === "PAGAMENTO_FATURA";
 }
 
-function classifyRow(r: Row, ctx: Context): Classification {
+const ruleCatches = (contains: string, description: string) => normalizeText(description).includes(contains);
+
+function classifyRow(r: Row, ctx: Context): ClassifiedAs {
+  const edit = ctx.edits.get(r.id);
+  if (edit) return { ...edit, source: "manual" };
+  const base = autoClassify(r, ctx);
+  const rule = ctx.userRules.find((u) => ruleCatches(u.contains, r.description));
+  if (!rule) return base;
+  const nature = rule.nature ?? base.nature;
+  const out: ClassifiedAs = { nature, source: "rule" };
+  if (nature === "expense") out.category = rule.category ?? base.category ?? "other";
+  else if (nature === "refund") {
+    const category = rule.category ?? base.category;
+    if (category) out.category = category;
+  } else if (nature === "income") out.origin = rule.origin ?? base.origin ?? "other-income";
+  return out;
+}
+
+function autoClassify(r: Row, ctx: Context): ClassifiedAs {
   const { config } = ctx;
   const credit = isCredit(r);
 
   // 1. Built-in rules
   const builtIn = builtInMatch(r, config);
-  if (builtIn) return builtIn;
+  if (builtIn) return { ...builtIn, source: "rule" };
+  const deduced = deduce(r, ctx, credit);
+  return { ...deduced, source: "pluggy" };
+}
+
+function deduce(r: Row, ctx: Context, credit: boolean): Classification {
+  const { config } = ctx;
 
   // 2. Signals Pluggy gives
   const counterpart = credit ? r.payerDoc : r.receiverDoc;
@@ -155,6 +214,15 @@ function classifyRow(r: Row, ctx: Context): Classification {
   // (its category: Pluggy's, mapped to the app's 11, else Outros).
   if (credit) return { nature: "income", origin: "other-income" };
   return { nature: "expense", category: mappedCategory(r, config) ?? "other" };
+}
+
+/** Keeps only what the nature allows: category on expenses and refunds, origin on income. */
+function tidy(c: Classification): Classification {
+  const out: Classification = { nature: c.nature };
+  if ((c.nature === "expense" || c.nature === "refund") && c.category) out.category = c.category;
+  if (c.nature === "expense" && !out.category) out.category = "other";
+  if (c.nature === "income") out.origin = c.origin ?? "other-income";
+  return out;
 }
 
 export interface ClassificationDeps {
@@ -193,6 +261,19 @@ export function createClassification(deps: ClassificationDeps) {
       }
     }
     return docs;
+  }
+
+  async function loadUserRules(): Promise<UserRule[]> {
+    const rows = await db.select().from(userRule);
+    return rows
+      .sort((a, b) => b.id - a.id)
+      .map((r) => ({
+        id: r.id,
+        contains: r.contains,
+        ...(r.nature ? { nature: r.nature as Nature } : {}),
+        ...(r.category ? { category: r.category as AppCategory } : {}),
+        ...(r.origin ? { origin: r.origin as IncomeOrigin } : {}),
+      }));
   }
 
   async function loadRows(): Promise<Row[]> {
@@ -254,8 +335,80 @@ export function createClassification(deps: ClassificationDeps) {
       await db.insert(appMeta).values({ key: CPF_KEY, value: cpf }).onConflictDoUpdate({ target: appMeta.key, set: { value: cpf } });
       return { ok: true } as const;
     },
+    async editTransaction(id: string, classification: Classification): Promise<void> {
+      const [tx] = await db.select().from(bankTransaction).where(eq(bankTransaction.id, id));
+      if (!tx) return;
+      const c = tidy(classification);
+      const values = {
+        transactionId: id,
+        accountId: tx.accountId,
+        amount: tx.amountInAccountCurrency ?? tx.amount,
+        description: tx.description,
+        date: tx.date,
+        nature: c.nature,
+        category: c.category ?? null,
+        origin: c.origin ?? null,
+      };
+      await db.insert(manualEdit).values(values).onConflictDoUpdate({ target: manualEdit.transactionId, set: values });
+    },
+
+    async previewRule(rule: RuleInput): Promise<{ count: number }> {
+      const contains = normalizeText(rule.contains);
+      if (!contains) return { count: 0 };
+      const edited = new Set((await db.select().from(manualEdit)).map((e) => e.transactionId));
+      const rows = await db.select().from(bankTransaction);
+      return { count: rows.filter((t) => !edited.has(t.id) && ruleCatches(contains, t.description)).length };
+    },
+
+    async addRule(rule: RuleInput): Promise<RuleResult> {
+      const contains = normalizeText(rule.contains);
+      if (!contains) return { ok: false, message: "Escreva o texto que a descrição deve conter." };
+      if (!rule.nature && !rule.category && !rule.origin) return { ok: false, message: "Escolha uma natureza ou uma categoria." };
+      await db.insert(userRule).values({ contains, nature: rule.nature ?? null, category: rule.category ?? null, origin: rule.origin ?? null });
+      return { ok: true };
+    },
+
+    async deleteRule(id: number): Promise<void> {
+      await db.delete(userRule).where(eq(userRule.id, id));
+    },
+
+    async listRules() {
+      return { user: await loadUserRules(), builtIn: config.builtInRules };
+    },
+
+    async moveEdits(newIds: string[]): Promise<void> {
+      if (newIds.length === 0) return;
+      const edits = await db.select().from(manualEdit);
+      if (edits.length === 0) return;
+      const existing = new Set((await db.select({ id: bankTransaction.id }).from(bankTransaction)).map((t) => t.id));
+      const orphans = edits.filter((e) => !existing.has(e.transactionId));
+      if (orphans.length === 0) return;
+      const edited = new Set(edits.map((e) => e.transactionId));
+      const fresh = (await db.select().from(bankTransaction).where(inArray(bankTransaction.id, newIds)))
+        .filter((t) => !edited.has(t.id))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const taken = new Set<string>();
+      for (const old of orphans) {
+        const target = fresh.find((t) => {
+          if (taken.has(t.id) || t.accountId !== old.accountId || t.description !== old.description) return false;
+          if (Math.round((t.amountInAccountCurrency ?? t.amount) * 100) !== Math.round(old.amount * 100)) return false;
+          const days = dayNumber(t.date) - dayNumber(old.date);
+          return days >= 0 && days <= 5;
+        });
+        if (!target) continue;
+        taken.add(target.id);
+        await db.delete(manualEdit).where(eq(manualEdit.transactionId, old.transactionId));
+        await db.insert(manualEdit).values({
+          ...old,
+          transactionId: target.id,
+          date: target.date,
+          amount: target.amountInAccountCurrency ?? target.amount,
+        });
+      }
+    },
+
     /** The classification of the given transactions, computed from what is stored right now. */
-    async classify(ids: string[]): Promise<Map<string, Classification>> {
+    async classify(ids: string[]): Promise<Map<string, ClassifiedAs>> {
       const rows = await loadRows();
       const status = await cpfStatus();
       const ctx: Context = {
@@ -263,6 +416,13 @@ export function createClassification(deps: ClassificationDeps) {
         cpf: status.state === "known" ? status.cpf : null,
         employerDocs: await employerDocs(),
         matchedBillPayments: matchBillPayments(rows),
+        userRules: await loadUserRules(),
+        edits: new Map(
+          (await db.select().from(manualEdit)).map((e) => [
+            e.transactionId,
+            tidy({ nature: e.nature as Nature, category: (e.category ?? undefined) as AppCategory | undefined, origin: (e.origin ?? undefined) as IncomeOrigin | undefined }),
+          ]),
+        ),
       };
       const wanted = new Set(ids);
       return new Map(rows.filter((r) => wanted.has(r.id)).map((r) => [r.id, classifyRow(r, ctx)]));
