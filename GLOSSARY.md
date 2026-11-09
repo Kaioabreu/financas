@@ -48,6 +48,10 @@ O assunto de um gasto (Mercado, Transporte…), escolhido de uma lista fixa do a
 **Fatura**:
 O conjunto de compras de um cartão cobradas num mesmo vencimento. Ela não decide em que mês um gasto conta: a compra conta no mês em que foi feita.
 
+**Lacuna**:
+Parte do total de uma fatura fechada que não aparece nas transações que o Pluggy entregou para ela. O app a mostra, mas não a preenche.
+_Avoid_: diferença, furo, lançamento faltante
+
 **Compra parcelada**:
 Compra no cartão paga em parcelas. Tem uma natureza e uma categoria só, que valem para todas as suas parcelas.
 
