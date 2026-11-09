@@ -83,7 +83,7 @@ export function deriveStatus(row: Row, now: number, expired: boolean, refused: b
 
 // ---- The Resumo's notice ----
 
-export type NoticeKind = "credentials" | "reconnect" | "late" | "expiring";
+export type NoticeKind = "credentials" | "reconnect" | "late" | "expiring" | "backup";
 export interface Notice {
   /** Stable key, used to snooze. */
   key: string;
@@ -91,7 +91,7 @@ export interface Notice {
   text: string;
   itemId?: string;
   /** What a tap does. */
-  action: "update-secret" | "reconnect" | "open-connections" | "renew";
+  action: "update-secret" | "reconnect" | "open-connections" | "renew" | "backup";
   snoozable: boolean;
 }
 export interface NoticeQueue {
@@ -107,9 +107,26 @@ export interface NoticeSource {
   status: ConnectionStatus | null;
 }
 
-const RANK: Record<NoticeKind, number> = { credentials: 0, reconnect: 1, late: 2, expiring: 3 };
+const RANK: Record<NoticeKind, number> = { credentials: 0, reconnect: 1, late: 2, expiring: 3, backup: 4 };
 
-export function buildNotices(refused: boolean, sources: NoticeSource[], snoozedUntil: (key: string) => number, now: number): NoticeQueue {
+export const BACKUP_MAX_AGE_MS = 30 * 86_400_000;
+
+/** The Backup reminder: never made (once something was synced) or older than 30 days. */
+export function backupNotice(lastBackupAt: string | null, synced: boolean, now: number): Notice | null {
+  const base = { key: "backup", kind: "backup", action: "backup", snoozable: true } as const;
+  if (!lastBackupAt) return synced ? { ...base, text: "Você ainda não fez um backup · Fazer backup" } : null;
+  const age = now - Date.parse(lastBackupAt);
+  if (age <= BACKUP_MAX_AGE_MS) return null;
+  return { ...base, text: `Seu último backup tem ${Math.floor(age / 86_400_000)} dias · Fazer backup` };
+}
+
+export function buildNotices(
+  refused: boolean,
+  sources: NoticeSource[],
+  snoozedUntil: (key: string) => number,
+  now: number,
+  backup: Notice | null = null,
+): NoticeQueue {
   const all: Notice[] = [];
   if (refused) {
     all.push({ key: "credentials", kind: "credentials", text: "O Pluggy recusou suas credenciais · Atualizar Client Secret", action: "update-secret", snoozable: false });
@@ -125,6 +142,7 @@ export function buildNotices(refused: boolean, sources: NoticeSource[], snoozedU
       all.push({ key: `expiring:${s.itemId}`, kind: "expiring", itemId: s.itemId, text: `A conexão com o ${s.bankName} vence em ${n} ${n === 1 ? "dia" : "dias"} · Renovar`, action: "renew", snoozable: true });
     }
   }
+  if (backup) all.push(backup);
   const open = all
     .filter((n) => snoozedUntil(n.key) <= now)
     .map((n, i) => ({ n, i }))

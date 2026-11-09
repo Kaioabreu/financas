@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
 import { createContext, useContext } from "react";
 import { embeddedConfig } from "../core/config";
@@ -22,6 +23,13 @@ export function createAppCore(orm: unknown): Core {
       delete: () => SecureStore.deleteItemAsync(SECRET_KEY),
     },
     config: embeddedConfig,
+    // Typo guard only (the file's own cipher is the real protection): iterated SHA-256 over salt and password.
+    passwordHash: async (password, salt) => {
+      let digest = `${salt}:${password}`;
+      for (let i = 0; i < 1000; i++) digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${salt}:${digest}`);
+      return digest;
+    },
+    randomHex: (n) => Array.from(Crypto.getRandomBytes(n), (b) => b.toString(16).padStart(2, "0")).join(""),
     env: { appVersion: Constants.expoConfig?.version ?? "?", otaId: Constants.manifest2?.id ?? null },
   });
   return currentCore;
