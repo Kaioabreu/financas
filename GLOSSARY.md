@@ -89,3 +89,36 @@ Aportes menos resgates do mês. Quando é negativo, o mês mostra um resgate lí
 
 **Semana**:
 De segunda a domingo, cortada no começo e no fim do mês para que as semanas somem o mês.
+
+### Patrimônio
+
+**Patrimônio**:
+O que o usuário tem menos o que ele deve, contando só o que o app enxerga: o caixa, a carteira e as dívidas. Fica de fora o que os bancos não compartilham, como cripto, FGTS e imóveis.
+_Avoid_: patrimônio líquido, patrimônio bruto
+
+**Carteira**:
+Os investimentos, cofrinhos e caixinhas do usuário, isto é, o patrimônio sem o caixa e sem as dívidas. É para onde vão os aportes.
+_Avoid_: portfólio, investimentos (no sentido do conjunto)
+
+**Dívida**:
+O que o patrimônio desconta: as compras de cartão já lançadas e ainda não pagas e o cheque especial usado. Uma parcela só vira dívida no mês em que cai.
+
+**Valor de resgate**:
+Quanto o usuário receberia ao resgatar um investimento hoje, já descontados o imposto e o IOF. É o valor que o patrimônio usa.
+_Avoid_: valor líquido, valor bruto
+
+**Classe**:
+O grupo em que um item do patrimônio aparece na distribuição: Caixa, Renda fixa, Renda variável, Fundos ou Outros. O Caixa é o saldo das contas, inclusive o que rende sozinho numa conta remunerada; cofrinhos e caixinhas ficam em Renda fixa.
+_Avoid_: mercado, tipo, categoria (reservada para gastos)
+
+**Retrato**:
+O valor de cada conta, investimento, cofrinho e dívida num dia. O app guarda um quando sincroniza; os meses antes da instalação têm retratos estimados a partir das transações e das operações de investimento. Cada mês da evolução usa o último retrato do mês.
+_Avoid_: foto, snapshot
+
+**Valorização**:
+Quanto a carteira variou num período sem contar os aportes e os resgates. Não é receita.
+_Avoid_: ganho, lucro, rendimento
+
+**Rentabilidade**:
+A valorização da carteira num período, somada aos proventos e juros que ela pagou, em proporção ao que estava investido. É comparada com o CDI do mesmo período.
+_Avoid_: rendimento, performance
