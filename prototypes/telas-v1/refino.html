@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTÓTIPO · Refino do v1</title>
+<!--
+  PROTOTYPE, throwaway. Do not build on this code.
+  Round 3 of issue #5 ("Como devem ser as telas do v1?").
+  Decided so far: five fixed tabs (round 1); the round-2 "Cédula" layout, thin line icons and Archivo text (round 2);
+  white or black background following light/dark mode; no banknote, no hatching, no dashed decoration, no Bodoni.
+  Question now: which type pairing for titles and numbers (Archivo, Jost, or Archivo text with Jost titles and numbers)?
+  Switch with ?variant=A|B|C and the floating bar (keys ← →); the moon/sun button flips light/dark.
+  Sample data is invented in the shape of the author's spreadsheet. No value is real.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Jost:wght@300..700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#d9d8d3;color:#1c1c1e;-webkit-font-smoothing:antialiased}
+body.dark-stage{background:#2a2a2c}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:inherit;letter-spacing:inherit}
+button:disabled{opacity:.3;cursor:default}
+:focus-visible{outline:2px solid #2D62B0;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---------- stage (not part of the design) ---------- */
+.stage{min-height:100vh;display:flex;gap:40px;align-items:center;justify-content:center;padding:28px 24px 100px}
+.phone{width:390px;height:800px;border-radius:48px;border:12px solid #17171a;background:#000;position:relative;overflow:hidden;box-shadow:0 40px 80px -30px rgba(0,0,0,.45);flex:none}
+#app{position:absolute;inset:0;overflow:hidden}
+#app>div{height:100%}
+#app *{scrollbar-width:none}
+#app *::-webkit-scrollbar{display:none}
+.notes{width:340px;font-size:14px;line-height:1.55;color:#33322f;max-height:800px;overflow:auto}
+.dark-stage .notes{color:#d8d6d0}
+.notes .n-tag{display:inline-block;background:#ffcc00;color:#111;font-weight:700;font-size:11px;letter-spacing:.06em;padding:3px 8px;border-radius:6px}
+.notes h1{font-size:22px;margin:10px 0 2px}
+.notes h2{font-size:17px;margin:14px 0 4px}
+.notes h3{font-size:13px;opacity:.7;margin:16px 0 4px}
+.notes ul{padding-left:18px}.notes li{margin:3px 0}
+.notes .state{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:rgba(127,127,127,.12);border-radius:8px;padding:8px 10px;white-space:pre-wrap}
+.notes .fine{font-size:12px;opacity:.75;margin-top:12px}
+.switcher{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;background:#111;color:#fff;border-radius:999px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.35);z-index:1000;font-size:14px;outline:2px dashed #ffcc00;outline-offset:3px;font-family:system-ui,sans-serif}
+.switcher button{width:38px;height:38px;border-radius:50%;color:#fff;font-size:18px;text-align:center}
+.switcher button:hover{background:#333}
+.switcher .lbl{padding:0 10px;min-width:170px;text-align:center;font-weight:600;white-space:nowrap}
+.switcher .sep{width:1px;height:22px;background:#444;margin:0 4px}
+@media (max-width:820px){.notes{display:none}}
+@media (max-width:520px){.stage{padding:0;display:block}.phone{width:100vw;height:100vh;height:100dvh;border:0;border-radius:0}.switcher{top:8px;bottom:auto;font-size:12px}.switcher .lbl{min-width:110px}.switcher button{width:30px;height:30px}}
+
+/* ---------- shared ---------- */
+.amt{font-variant-numeric:tabular-nums;white-space:nowrap}
+.sheet-bg{position:absolute;inset:0;z-index:40;display:flex;align-items:flex-end}
+.sheet{width:100%;max-height:88%;overflow:auto;cursor:default}
+.toast{position:absolute;left:16px;right:16px;bottom:96px;z-index:50;padding:12px 16px;font-size:13.5px}
+.rtog{display:flex;gap:12px;align-items:center;width:100%;text-align:left;font-size:13.5px;line-height:1.35}
+.rtog .sw{width:38px;height:22px;position:relative;flex:none;transition:background .15s}
+.rtog .sw::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;transition:left .15s}
+.rtog.on .sw::after{left:19px}
+.rtog small{display:block;opacity:.7;font-size:12px}
+.rule-row{display:flex;align-items:center;gap:10px;padding:12px 0;font-size:14px}
+.rule-row span{flex:1}.rule-row small{display:block;opacity:.65;font-size:12px}
+.rule-row button{width:32px;height:32px;text-align:center}
+.empty{text-align:center;padding:40px 24px;line-height:1.45}
+.empty p{font-size:13.5px;opacity:.75;margin-top:6px}
+.swap{display:block;margin:18px auto 6px;font-size:13px;text-decoration:underline;text-underline-offset:3px;opacity:.75}
+
+/* ---------- the look (one design, three type pairings, light + dark) ---------- */
+.r3{--bg:#FFFFFF;--ink:#111418;--ink2:#5E6670;--rule:#E7E9EC;--track:#F0F2F4;--acc:#2D62B0;--pos:#1E7A4C;--neg:#B8325A;
+  --fx:'Archivo';--ft:'Archivo';--fn:'Archivo';
+  --fx-v:'wdth' 100,'wght' 400;--fx-b:'wdth' 100,'wght' 600;--ft-v:'wdth' 100,'wght' 720;--fn-v:'wdth' 100,'wght' 620;
+  background:var(--bg);color:var(--ink);font-family:var(--fx),sans-serif;font-variation-settings:var(--fx-v);display:flex;flex-direction:column;position:relative}
+.r3.dark{--bg:#000000;--ink:#F2F3F5;--ink2:#9AA1AA;--rule:#202328;--track:#16181B;--acc:#6E9BE6;--pos:#4CC38A;--neg:#E0577F}
+.r3.fB{--fx:'Jost';--ft:'Jost';--fn:'Jost';--fx-v:'wght' 400;--fx-b:'wght' 500;--ft-v:'wght' 500;--fn-v:'wght' 500}
+.r3.fC{--ft:'Jost';--fn:'Jost';--ft-v:'wght' 500;--fn-v:'wght' 500}
+.r3 .num{font-family:var(--fn),sans-serif;font-variation-settings:var(--fn-v);font-variant-numeric:tabular-nums}
+.r3 .ttl{font-family:var(--ft),sans-serif;font-variation-settings:var(--ft-v)}
+.r3 .bold{font-variation-settings:var(--fx-b)}
+.r3-head{padding:24px 22px 4px}
+.r3-top{display:flex;justify-content:space-between;align-items:baseline}
+.r3-title{font-size:32px;letter-spacing:-.02em;line-height:1.1}
+.r3-link{font-size:13px;color:var(--acc);font-variation-settings:var(--fx-b)}
+.r3-month{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:14px;color:var(--ink2)}
+.r3-month button{width:28px;height:28px;border:1px solid var(--rule);border-radius:50%;color:var(--ink);font-size:15px;text-align:center}
+.r3-month em{font-style:normal;font-size:12px;color:var(--neg)}
+.r3-main{flex:1;overflow-y:auto;padding:10px 20px 28px}
+.r3-hero{padding:10px 0 6px}
+.r3-hero .k{font-size:13.5px;color:var(--ink2)}
+.r3-hero .v{font-size:46px;letter-spacing:-.025em;line-height:1.08;margin-top:2px}
+.r3-hero .s{font-size:12.5px;color:var(--ink2);margin-top:4px}
+.r3-sec{margin-top:28px}
+.r3-h{font-size:17px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.r3-h small{font-family:var(--fx),sans-serif;font-variation-settings:var(--fx-v);font-size:12px;color:var(--ink2);text-align:right}
+.r3-legend{display:flex;gap:18px;font-size:12px;color:var(--ink2);margin-top:6px}
+.r3-legend span{display:flex;align-items:center;gap:6px}
+.r3-legend i{width:12px;height:8px;border-radius:2px;display:block}
+.r3-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--rule);width:100%;text-align:left}
+.r3-row:last-child{border-bottom:0}
+.r3-row.block{display:block}
+.r3-row.block>.line{display:flex;align-items:center;gap:12px}
+.r3-ic{width:38px;height:38px;border-radius:50%;border:1px solid;display:grid;place-items:center;flex:none}
+.r3-ic.sm{width:32px;height:32px}
+.r3-row .t{flex:1;min-width:0}
+.r3-row .d{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r3-row .s{display:block;font-size:12px;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r3-row .s em{font-style:normal;color:var(--acc)}
+.r3-row .r{text-align:right;flex:none}
+.r3-row .r b{display:block;font-weight:normal;font-size:16.5px}
+.r3-row .r small{font-size:11px;color:var(--ink2)}
+.r3-row.muted{opacity:.45}
+.r3-bar{display:block;height:4px;border-radius:2px;background:var(--track);margin-top:9px;overflow:hidden}
+.r3-bar i{display:block;height:100%;border-radius:2px}
+.r3-seg{display:flex;gap:22px;margin:6px 0 14px;font-size:15px;border-bottom:1px solid var(--rule)}
+.r3-seg button,.r3-accs button{padding:8px 0;color:var(--ink2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.r3-seg button.on,.r3-accs button.on{color:var(--ink);border-color:var(--ink);font-variation-settings:var(--fx-b)}
+.r3-accs{display:flex;gap:18px;overflow-x:auto;margin:4px 0 6px;font-size:14px;border-bottom:1px solid var(--rule)}
+.r3-accs button{flex:none}
+.r3-filter{display:inline-flex;gap:6px;align-items:center;font-size:13px;margin:10px 0 0;padding:5px 12px;border:1px solid var(--ink);border-radius:999px}
+.r3-day{font-size:13px;font-variation-settings:var(--fx-b);color:var(--ink2);margin:20px 0 0}
+.r3-big{font-size:44px;letter-spacing:-.025em;line-height:1.08}
+.r3-sub{font-size:13px;color:var(--ink2);margin-top:2px}
+.r3-sub.pos{color:var(--pos)}
+.r3-fine{font-size:12px;color:var(--ink2);line-height:1.45;margin-top:8px}
+.r3-items{padding:2px 0 8px 46px;font-size:13px;color:var(--ink2)}
+.r3-items div{display:flex;justify-content:space-between;padding:3px 0}
+.r3-tabs{display:flex;background:var(--bg);border-top:1px solid var(--rule);padding:10px 4px 20px}
+.r3-tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:var(--ink2);text-align:center;position:relative}
+.r3-tabs button.on{color:var(--ink);font-variation-settings:var(--fx-b)}
+.r3-tabs button.on::before{content:'';position:absolute;top:-11px;width:18px;height:2px;border-radius:1px;background:var(--ink)}
+.r3 .sheet-bg{background:rgba(0,0,0,.45)}
+.r3 .sheet{background:var(--bg);border-radius:18px 18px 0 0;border-top:1px solid var(--rule);padding:20px 22px 26px}
+.r3-sh-d{font-size:15px;color:var(--ink2)}
+.r3-sh-v{font-size:34px;letter-spacing:-.02em;margin:2px 0}
+.r3-cats{display:grid;grid-template-columns:1fr 1fr;column-gap:16px;margin-top:8px}
+.r3-cats button{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--rule);font-size:14px;text-align:left}
+.r3-cats button.on{font-variation-settings:var(--fx-b)}
+.r3-cats button.on::after{content:'';width:7px;height:7px;border-radius:50%;background:var(--acc);margin-left:auto}
+.r3 .rtog{border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:12px 0;margin-top:14px}
+.r3 .rtog .sw{background:var(--rule);border-radius:11px}.r3 .rtog .sw::after{border-radius:50%}
+.r3 .rtog.on .sw{background:var(--acc)}
+.r3 .rule-row{border-bottom:1px solid var(--rule)}
+.r3 .rule-row button{border:1px solid var(--rule);border-radius:50%}
+.r3 .toast{background:var(--ink);color:var(--bg);border-radius:12px}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="phone"><div id="app"></div></div>
+  <aside class="notes" id="notes"></aside>
+</div>
+<div class="switcher" role="toolbar" aria-label="Trocar variante do protótipo">
+  <button data-act="variant-prev" aria-label="Variante anterior">←</button>
+  <span class="lbl" id="sw-label"></span>
+  <button data-act="variant-next" aria-label="Próxima variante">→</button>
+  <span class="sep"></span>
+  <button data-act="mode" id="sw-mode" aria-label="Alternar claro e escuro"></button>
+</div>
+
+<script>
+'use strict';
+// ============================================================
+// Formatting
+// ============================================================
+const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const BRL0 = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const fmt = v => BRL.format(v);
+const fmt0 = v => BRL0.format(v);
+const signed = v => (v > 0 ? '+' : v < 0 ? '−' : '') + BRL.format(Math.abs(v));
+const signed0 = v => (v > 0 ? '+' : v < 0 ? '−' : '') + BRL0.format(Math.abs(v));
+const fmtK = v => { const a = Math.abs(v), s = v < 0 ? '−' : ''; return a >= 1000 ? `${s}${(a / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : `${s}${Math.round(a)}`; };
+const pct = v => (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: v < 0.1 ? 1 : 0 }) + '%';
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const MS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const MF = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const WDF = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+const cap = s => s[0].toUpperCase() + s.slice(1);
+const dayLong = d => `${cap(WDF[d.getDay()])}, ${d.getDate()} de ${MF[d.getMonth()]}`;
+const dayShort = d => `${d.getDate()} de ${MS[d.getMonth()]}`;
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ============================================================
+// Invented sample data (same generator as round 1; no real values)
+// ============================================================
+const TODAY = new Date(2026, 10, 8);
+const MONTHS = [5, 6, 7, 8, 9, 10].map(m => ({ y: 2026, m, key: '2026-' + String(m + 1).padStart(2, '0'), label: cap(MF[m]) + ' de 2026', short: cap(MS[m]), partial: m === TODAY.getMonth() }));
+const monthOf = k => MONTHS.find(x => x.key === k);
+const monthIdx = () => MONTHS.findIndex(m => m.key === S.month);
+const ACC = {
+  'btg-conta': { name: 'BTG Conta', short: 'BTG', balance: 1842.37 },
+  'btg-cartao': { name: 'BTG Cartão', short: 'Cartão BTG' },
+  'nubank': { name: 'Nubank', short: 'Nubank', balance: 118.40 },
+  'mercado-pago': { name: 'Mercado Pago', short: 'Mercado Pago', balance: 2310.55 },
+};
+const ACC_ORDER = ['btg-conta', 'btg-cartao', 'nubank', 'mercado-pago'];
+const ACC_TAB = { all: 'Todas', 'btg-conta': 'BTG', 'btg-cartao': 'Cartão', nubank: 'Nubank', 'mercado-pago': 'MP' };
+// Ten categories as the Pluggy/rules see them; charts fold the last three into "Outros" (max 7 hues + gray).
+const CATS = {
+  transporte: { label: 'Transporte', icon: 'bus', glyph: 'circle' },
+  alimentacao: { label: 'Alimentação', icon: 'food', glyph: 'bowl' },
+  mercado: { label: 'Mercado', icon: 'cart', glyph: 'quarter' },
+  compras: { label: 'Compras', icon: 'bag', glyph: 'triangle' },
+  lazer: { label: 'Lazer e games', icon: 'game', glyph: 'diamond' },
+  saude: { label: 'Saúde', icon: 'heart', glyph: 'plus' },
+  viagem: { label: 'Viagem', icon: 'plane', glyph: 'split' },
+  assinaturas: { label: 'Assinaturas', icon: 'tv', glyph: 'dots' },
+  contas: { label: 'Contas fixas', icon: 'receipt', glyph: 'dots' },
+  outros: { label: 'Outros', icon: 'more', glyph: 'dots' },
+};
+const FOLD = { assinaturas: 'outros', contas: 'outros', outros: 'outros' };
+const groupOf = k => FOLD[k] || k;
+const GROUP_LABEL = k => k === 'outros' ? 'Outros' : CATS[k].label;
+const GROUP_NOTE = 'assinaturas, contas fixas e outros';
+const INCOME_LABEL = { salario: 'Salário', outras: 'Outras receitas', rendimentos: 'Rendimentos' };
+const KIND = {
+  receita: { icon: 'income', glyph: 'ring' },
+  aporte: { icon: 'growth', glyph: 'steps', label: 'Aporte' },
+  propria: { icon: 'swap', glyph: 'hourglass', label: 'Entre suas contas' },
+  fatura: { icon: 'card', glyph: 'stripes', label: 'Pagamento de fatura' },
+  reembolso: { icon: 'undo', glyph: 'half', label: 'Reembolso' },
+};
+const SPEND = [
+  { d: 'Uber', cat: 'transporte', acc: 'btg-cartao', min: 9, max: 34, n: [14, 22] },
+  { d: '99 Pop', cat: 'transporte', acc: 'btg-cartao', min: 8, max: 26, n: [2, 5] },
+  { d: 'Metrô', cat: 'transporte', acc: 'btg-cartao', fixed: 7.9, n: [6, 10] },
+  { d: 'iFood', cat: 'alimentacao', acc: 'btg-cartao', min: 28, max: 78, n: [5, 9] },
+  { d: 'Restaurante Bom Sabor', cat: 'alimentacao', acc: 'btg-cartao', min: 45, max: 130, n: [2, 4] },
+  { d: 'Padaria Pão Quente', cat: 'alimentacao', acc: 'btg-cartao', min: 8, max: 29, n: [2, 5] },
+  { d: 'Lanchonete (Pix QR)', cat: 'alimentacao', acc: 'mercado-pago', min: 12, max: 38, n: [1, 3] },
+  { d: 'Supermercado Bom Preço', cat: 'mercado', acc: 'btg-cartao', min: 55, max: 210, n: [2, 4] },
+  { d: 'Netflix', cat: 'assinaturas', acc: 'btg-cartao', fixed: 44.9, day: 7 },
+  { d: 'Spotify', cat: 'assinaturas', acc: 'btg-cartao', fixed: 21.9, day: 3 },
+  { d: 'YouTube Premium', cat: 'assinaturas', acc: 'btg-cartao', fixed: 24.9, day: 11 },
+  { d: 'Steam', cat: 'lazer', acc: 'btg-cartao', min: 20, max: 150, n: [1, 3] },
+  { d: 'Cinema Estação', cat: 'lazer', acc: 'btg-cartao', min: 28, max: 64, n: [0, 2] },
+  { d: 'Loja Estilo', cat: 'compras', acc: 'btg-cartao', min: 90, max: 340, n: [1, 2] },
+  { d: 'Amazon', cat: 'compras', acc: 'btg-cartao', min: 35, max: 260, n: [1, 3] },
+  { d: 'Drogaria Saúde', cat: 'saude', acc: 'btg-cartao', min: 18, max: 95, n: [0, 2] },
+  { d: 'Academia Movimento', cat: 'saude', acc: 'btg-cartao', fixed: 119.9, day: 5 },
+  { d: 'Operadora de celular', cat: 'contas', acc: 'btg-conta', fixed: 59.9, day: 28 },
+  { d: 'Hospedagem de site', cat: 'outros', acc: 'mercado-pago', fixed: 18.9, day: 10 },
+  { d: 'Bilhete Único (Pix)', cat: 'transporte', acc: 'nubank', fixed: 40, n: [0, 1] },
+];
+const EXTRAS = {
+  5: { aporte: 3520, items: [[22, 'Freela de design (Pix)', 'receita', 'outras', 'nubank', 1800]] },
+  6: { aporte: 2150, items: [] },
+  7: { aporte: 17900, items: [[20, 'PLR', 'receita', 'salario', 'btg-conta', 19600], [23, 'Ingresso de show', 'gasto', 'lazer', 'btg-cartao', -380]] },
+  8: { aporte: 3950, items: [[9, 'Passagem aérea', 'gasto', 'viagem', 'btg-cartao', -2380], [11, 'Hotel Beira-Mar', 'gasto', 'viagem', 'btg-cartao', -640]] },
+  9: { aporte: 2600, items: [[18, 'Venda de monitor (Pix)', 'receita', 'outras', 'mercado-pago', 450]] },
+  10: { aporte: 0, items: [] },
+};
+function genMonth(mo) {
+  const { y, m } = mo, rnd = mulberry32(97 * (m + 3)), last = new Date(y, m + 1, 0).getDate();
+  const cutoff = mo.partial ? TODAY.getDate() : last; const out = []; let seq = 0;
+  const rint = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+  const ramt = (a, b) => Math.round((a + rnd() * (b - a)) * 100) / 100;
+  const push = (day, o) => { const s = seq++; if (day > cutoff) return; out.push({ id: mo.key + '-' + s, seq: s, mk: mo.key, date: new Date(y, m, day), ...o }); };
+  for (const t of SPEND) { const n = t.n ? rint(t.n[0], t.n[1]) : 1; for (let i = 0; i < n; i++) { const day = t.day || rint(1, last); const amt = t.fixed || ramt(t.min, t.max); push(day, { desc: t.d, amount: -amt, acc: t.acc, kind: 'gasto', cat: t.cat }); } }
+  const k = m - 3;
+  push(12, { desc: `Tênis esportivo (${k}/10)`, amount: -99.99, acc: 'btg-cartao', kind: 'gasto', cat: 'compras', parcela: `${k}/10` });
+  push(15, { desc: 'Salário, 1ª parte', amount: 2284.5, acc: 'btg-conta', kind: 'receita', cat: 'salario' });
+  push(Math.min(30, last), { desc: 'Salário, 2ª parte', amount: 2061.2, acc: 'btg-conta', kind: 'receita', cat: 'salario' });
+  const rend = ramt(5, 9); push(last, { desc: 'Rendimentos do mês', amount: rend, acc: 'mercado-pago', kind: 'receita', cat: 'rendimentos' });
+  const r1 = rnd(), rd = rint(3, 25), ra = ramt(25, 110);
+  if (r1 < 0.85) push(rd, { desc: 'Pix de Lucas Andrade', amount: ra, acc: 'nubank', kind: 'reembolso' });
+  push(16, { desc: 'Transferência para Mercado Pago', amount: -300, acc: 'btg-conta', kind: 'propria' });
+  push(16, { desc: 'Transferência do BTG', amount: 300, acc: 'mercado-pago', kind: 'propria' });
+  push(15, { desc: 'Pagamento da fatura BTG', amount: 0, acc: 'btg-conta', kind: 'fatura' });
+  const ex = EXTRAS[m];
+  if (ex.aporte) push(17, { desc: 'Aplicação em CDB e Tesouro', amount: -ex.aporte, acc: 'btg-conta', kind: 'aporte' });
+  for (const [d, desc, kind, cat, acc, amount] of ex.items) push(d, { desc, kind, cat, acc, amount });
+  out.sort((a, b) => b.date - a.date || b.seq - a.seq);
+  return out;
+}
+const TX = {}; MONTHS.forEach(mo => TX[mo.key] = genMonth(mo));
+(() => { let prev = 2410.35; for (const mo of MONTHS) { const f = TX[mo.key].find(t => t.kind === 'fatura'); if (f) f.amount = -prev; prev = TX[mo.key].filter(t => t.acc === 'btg-cartao').reduce((a, t) => a - t.amount, 0); } })();
+const ALL_TX = MONTHS.flatMap(mo => TX[mo.key]);
+const findTx = id => ALL_TX.find(t => t.id === id);
+const PAT = {
+  series: [['2026-06', 41200, true], ['2026-07', 43150, true], ['2026-08', 61300, true], ['2026-09', 64900, true], ['2026-10', 67380, false], ['2026-11', 67770, false]].map(([key, v, est]) => ({ key, v, est, label: cap(MS[+key.slice(5) - 1]) })),
+  classes: [
+    { key: 'rf', name: 'Renda fixa', value: 34600, items: [['Tesouro IPCA+ 2035', 10400], ['CDB 110% do CDI', 9800], ['Tesouro Prefixado', 6300], ['CRA de inflação', 4300], ['LCI', 3800]] },
+    { key: 'rv', name: 'Renda variável', value: 32200, items: [['Ações (11 ativos)', 15200], ['FIIs (4 fundos)', 15100], ['ETF', 1900]] },
+    { key: 'cx', name: 'Caixa', value: 820, items: [['Saldo na conta de investimento', 820]] },
+    { key: 'cr', name: 'Cripto', value: 150, items: [['Bitcoin', 150]] },
+  ],
+};
+const BEN = {
+  provider: 'Benefícios BTG, exemplo hipotético',
+  items: [{ name: 'Refeição', icon: 'food', glyph: 'bowl', balance: 412.30 }, { name: 'Alimentação', icon: 'cart', glyph: 'quarter', balance: 180.00 }, { name: 'Mobilidade', icon: 'bus', glyph: 'circle', balance: 95.50 }],
+  tx: [
+    { date: new Date(2026, 10, 6), desc: 'Restaurante Bom Sabor', wallet: 'Refeição', amount: -38.9 },
+    { date: new Date(2026, 10, 4), desc: 'Padaria Pão Quente', wallet: 'Refeição', amount: -14.5 },
+    { date: new Date(2026, 10, 3), desc: 'Supermercado Bom Preço', wallet: 'Alimentação', amount: -96.4 },
+    { date: new Date(2026, 10, 1), desc: 'Crédito mensal', wallet: 'Refeição', amount: 700 },
+    { date: new Date(2026, 10, 1), desc: 'Crédito mensal', wallet: 'Alimentação', amount: 300 },
+    { date: new Date(2026, 10, 1), desc: 'Crédito mensal', wallet: 'Mobilidade', amount: 150 },
+  ],
+};
+const benTotal = () => BEN.items.reduce((a, i) => a + i.balance, 0);
+
+// ============================================================
+// Palettes (validated with the dataviz validator: light on #FFFFFF, dark on #000000)
+// ============================================================
+const ORDER_CATS = ['transporte', 'alimentacao', 'compras', 'saude', 'viagem', 'lazer', 'mercado', 'outros'];
+const PAL = {
+  light: { cls: 'r3', order: ORDER_CATS, ink: '#111418', ink2: '#5E6670', rule: '#E7E9EC', acc: '#2D62B0', pos: '#1E7A4C', neg: '#B8325A', bg: '#FFFFFF',
+    colors: { transporte: '#2D62B0', alimentacao: '#B8325A', compras: '#B07A0A', saude: '#0E8AA6', viagem: '#C0622B', lazer: '#7650B0', mercado: '#2F8A5F', outros: '#8B9196' },
+    classes: { rf: '#2D62B0', rv: '#B07A0A', cx: '#2F8A5F', cr: '#7650B0' } },
+  dark: { cls: 'r3', order: ORDER_CATS, ink: '#F2F3F5', ink2: '#9AA1AA', rule: '#202328', acc: '#6E9BE6', pos: '#4CC38A', neg: '#E0577F', bg: '#000000',
+    colors: { transporte: '#5B8FE0', alimentacao: '#E0577F', compras: '#B88517', saude: '#1C9AB4', viagem: '#D06E3A', lazer: '#9C7BDB', mercado: '#46A877', outros: '#80878E' },
+    classes: { rf: '#5B8FE0', rv: '#B88517', cx: '#46A877', cr: '#9C7BDB' } },
+};
+const FONTS = {
+  A: { name: 'Archivo', cls: '', idea: 'Archivo em tudo: títulos, números e texto. Uma família só, com os números em peso semibold.' },
+  B: { name: 'Jost', cls: 'fB', idea: 'Jost em tudo. Mais redonda e leve que a Archivo, com números de desenho geométrico.' },
+  C: { name: 'Archivo + Jost', cls: 'fC', idea: 'Texto em Archivo, títulos e números em Jost. A leitura das listas fica na Archivo, e os números ganham o desenho da Jost.' },
+};
+const ORDER = ['A', 'B', 'C'];
+const T = () => PAL[S.mode];
+const catColor = k => T().colors[groupOf(k)];
+// ============================================================
+// State + derived data (shared by all three directions)
+// ============================================================
+const S = { variant: 'A', month: '2026-10', tab: 'mes', gmode: 'cat', acc: 'all', cat: null, week: null, sheet: null, patOpen: null, overrides: {}, rules: [], ruleOn: false, toast: null, benEmpty: false };
+const SCROLL = {};
+const ruleKey = t => t.desc.replace(/\s*\(\d+\/\d+\)$/, '');
+const matchRule = t => { const k = ruleKey(t).toLowerCase(); return S.rules.find(r => k.includes(r.match.toLowerCase())); };
+const effCat = t => S.overrides[t.id] || (matchRule(t) || {}).cat || t.cat;
+const catSource = t => S.overrides[t.id] ? 'manual' : matchRule(t) ? 'regra' : 'pluggy';
+const srcLabel = t => ({ manual: 'Você mudou a categoria', regra: 'Categoria definida por uma regra', pluggy: 'Categoria que veio do Pluggy' })[catSource(t)];
+const countRule = r => ALL_TX.filter(t => t.kind === 'gasto' && ruleKey(t).toLowerCase().includes(r.match.toLowerCase())).length;
+function txInfo(t) {
+  if (t.kind === 'gasto') { const c = effCat(t); return { icon: CATS[c].icon, glyph: CATS[c].glyph, color: catColor(c), label: CATS[c].label, tag: t.parcela ? `parcela ${t.parcela}` : null }; }
+  const k = KIND[t.kind], neutral = T().colors.outros;
+  if (t.kind === 'receita') return { icon: k.icon, glyph: k.glyph, color: T().pos, label: INCOME_LABEL[t.cat], tag: null };
+  if (t.kind === 'reembolso') return { icon: k.icon, glyph: k.glyph, color: T().pos, label: k.label, tag: 'abate dos gastos', note: 'Devolução de alguém: sai dos gastos do mês, não é receita.' };
+  if (t.kind === 'aporte') return { icon: k.icon, glyph: k.glyph, color: T().colors.transporte, label: k.label, tag: null, note: 'Conta como aporte (dinheiro guardado), não como gasto.' };
+  if (t.kind === 'propria') return { icon: k.icon, glyph: k.glyph, color: neutral, label: k.label, tag: 'não conta', muted: true, note: 'Ignorada: é dinheiro mudando de bolso entre contas suas.' };
+  return { icon: k.icon, glyph: k.glyph, color: neutral, label: k.label, tag: 'não conta', muted: true, note: 'Não conta: as compras do cartão já entraram como gasto, uma a uma.' };
+}
+function weeksOf(mo) {
+  const last = new Date(mo.y, mo.m + 1, 0).getDate(), weeks = []; let start = 1;
+  for (let d = 1; d <= last; d++) if (new Date(mo.y, mo.m, d).getDay() === 0 || d === last) { weeks.push({ start, end: d, future: mo.partial && start > TODAY.getDate() }); start = d + 1; }
+  return weeks;
+}
+const inWeek = (t, w) => t.date.getDate() >= w.start && t.date.getDate() <= w.end;
+function summarize(mk) {
+  const weeks = weeksOf(monthOf(mk)).map(w => ({ ...w, total: 0, n: 0 }));
+  const r = { receitas: 0, gastos: 0, aportes: 0, reemb: 0, byGroup: {}, byAcc: {}, weeks };
+  for (const t of TX[mk]) {
+    if (t.kind === 'receita') r.receitas += t.amount;
+    else if (t.kind === 'aporte') r.aportes -= t.amount;
+    else if (t.kind === 'reembolso') r.reemb += t.amount;
+    else if (t.kind === 'gasto') { const v = -t.amount, g = groupOf(effCat(t)), d = t.date.getDate(); r.gastos += v; r.byGroup[g] = (r.byGroup[g] || 0) + v; r.byAcc[t.acc] = (r.byAcc[t.acc] || 0) + v; const w = weeks.find(w => d >= w.start && d <= w.end); w.total += v; w.n++; }
+  }
+  r.bruto = r.gastos; r.gastos -= r.reemb; r.saldo = r.receitas - r.gastos;
+  const order = T().order;
+  r.groups = order.filter(k => r.byGroup[k]).map(k => ({ k, v: r.byGroup[k], label: GROUP_LABEL(k), color: T().colors[k] }));   // fixed order: for charts
+  r.ranked = [...r.groups].sort((a, b) => b.v - a.v);                                                                            // by value: for lists
+  return r;
+}
+function groupByDay(list) { const g = []; let cur = null; for (const t of list) { const k = t.date.toDateString(); if (!cur || cur.k !== k) { cur = { k, date: t.date, items: [] }; g.push(cur); } cur.items.push(t); } return g; }
+function txList(sum) {
+  return TX[S.month].filter(t => (S.acc === 'all' || t.acc === S.acc) && (!S.cat || (t.kind === 'gasto' && groupOf(effCat(t)) === S.cat)) && (S.week == null || (t.kind === 'gasto' && inWeek(t, sum.weeks[S.week]))));
+}
+function patNow() { const s = PAT.series, cur = s.at(-1).v, prev = s.at(-2).v; return { cur, prev, ser: s.map((p, i) => ({ ...p, on: i === s.length - 1 })) }; }
+
+// ============================================================
+// Icons: one stroke set (A thin, C chunky) + one geometric glyph set (B)
+// ============================================================
+const ICONS = {
+  bus: '<rect x="5" y="3.5" width="14" height="13" rx="3"/><path d="M5 10.5h14M8.5 20v-3.5M15.5 20v-3.5"/><path d="M8.5 13.5h.01M15.5 13.5h.01"/>',
+  food: '<path d="M7 3v7a2 2 0 0 0 2 2v9M11 3v7a2 2 0 0 1-2 2M9 3v5"/><path d="M17 21V3c-2 1.5-3 4-3 7s1 4 3 4"/>',
+  cart: '<path d="M3 4h2.2l2.3 10.3a1.2 1.2 0 0 0 1.2.9h8.6a1.2 1.2 0 0 0 1.2-.9L20.5 8H6.1"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="16.5" cy="19.5" r="1.3"/>',
+  bag: '<path d="M5 8.5h14l-1.2 12H6.2z"/><path d="M9 8.5V7a3 3 0 0 1 6 0v1.5"/>',
+  game: '<path d="M7 8h10a4 4 0 0 1 3.9 4.9l-.8 3.3a2 2 0 0 1-3.5.8L15 15H9l-1.6 2a2 2 0 0 1-3.5-.8l-.8-3.3A4 4 0 0 1 7 8z"/><path d="M8.5 10.5v3M7 12h3M15.5 11h.01M17 13h.01"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>',
+  plane: '<path d="M12 2.8c.9 0 1.4.9 1.4 2.3V9l7.1 4.1v2l-7.1-2.1v4.6l2.2 1.6v1.6L12 19.9l-3.6.9v-1.6l2.2-1.6V13l-7.1 2.1v-2L10.6 9V5.1c0-1.4.5-2.3 1.4-2.3z"/>',
+  tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8.5 21h7M12 17v4"/>',
+  receipt: '<path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z"/><path d="M9 8h6M9 12h6"/>',
+  more: '<path d="M6.5 12h.01M12 12h.01M17.5 12h.01"/>',
+  income: '<path d="M12 3.5v10M7.5 9 12 13.5 16.5 9"/><path d="M4 15.5V20h16v-4.5"/>',
+  growth: '<path d="M3.5 17l5.5-5.5 4 3 7.5-7.5"/><path d="M15 7h5.5v5.5"/>',
+  swap: '<path d="M4 8h15l-3.5-3.5M20 16H5l3.5 3.5"/>',
+  card: '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18M7 14.5h4"/>',
+  undo: '<path d="M9 6.5 4.5 11 9 15.5"/><path d="M4.5 11H15a4.5 4.5 0 0 1 0 9h-2"/>',
+  t_mes: '<rect x="2.5" y="6" width="19" height="12" rx="1.5"/><circle cx="12" cy="12" r="2.8"/><path d="M6 9.5v5M18 9.5v5"/>',
+  t_gastos: '<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8a8.5 8.5 0 0 1 5.2 5.2H15z"/>',
+  t_tx: '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/>',
+  t_pat: '<path d="M3 9.5 12 4l9 5.5"/><path d="M5.5 10.5v7M10 10.5v7M14 10.5v7M18.5 10.5v7M3 20.5h18"/>',
+  t_ben: '<path d="M3 7h18v3.2a1.8 1.8 0 0 0 0 3.6V17H3v-3.2a1.8 1.8 0 0 0 0-3.6z"/><path d="M14.5 7.5v1.5M14.5 11.2v1.6M14.5 15v1.5"/>',
+};
+const icon = (n, { size = 20, sw = 1.5, color = 'currentColor' } = {}) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+const GLYPHS = {
+  circle: '<circle cx="12" cy="12" r="7"/>',
+  bowl: '<path d="M4 11h16a8 8 0 0 1-16 0z"/>',
+  quarter: '<path d="M4 20V4a16 16 0 0 1 16 16z"/>',
+  triangle: '<path d="M12 4l8.5 16h-17z"/>',
+  diamond: '<path d="M12 3l9 9-9 9-9-9z"/>',
+  plus: '<path d="M9 4h6v5h5v6h-5v5H9v-5H4V9h5z"/>',
+  split: '<path d="M4 4h16L4 20z"/>',
+  dots: '<rect x="5" y="5" width="5.5" height="5.5"/><rect x="13.5" y="5" width="5.5" height="5.5"/><rect x="5" y="13.5" width="5.5" height="5.5"/><rect x="13.5" y="13.5" width="5.5" height="5.5"/>',
+  ring: '<path fill-rule="evenodd" d="M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm0 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/>',
+  steps: '<path d="M4 20v-5h5v-5h5V5h6v15z"/>',
+  hourglass: '<path d="M5 4h14L5 20h14z"/>',
+  stripes: '<path d="M4 5h16v3H4zM4 10.5h16v3H4zM4 16h16v3H4z"/>',
+  half: '<path d="M12 4a8 8 0 0 0 0 16z"/>',
+  t_mes: '<rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><path d="M13 20V13h7a7 7 0 0 1-7 7z"/>',
+  t_gastos: '<path d="M4 20V4a16 16 0 0 1 16 16z"/>',
+  t_tx: '<path d="M4 5h16v3H4zM4 10.5h16v3H4zM4 16h10v3H4z"/>',
+  t_pat: '<path d="M4 20v-5h5v-5h5V5h6v15z"/>',
+  t_ben: '<path fill-rule="evenodd" d="M4 4h16v16H4zm8 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/>',
+};
+const glyphTile = (g, { size = 34, bg, fg = '#fff' } = {}) => `<svg class="cb-glyph" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><rect width="24" height="24" fill="${bg}"/><g fill="${fg}" transform="translate(4.8 4.8) scale(.6)">${GLYPHS[g]}</g></svg>`;
+
+// ============================================================
+// Chart geometry helpers
+// ============================================================
+const barPath = (x, y, w, h, r) => { r = Math.min(r, w / 2, h); const b = y + h; return `M${x},${b}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${b}Z`; };
+function lineGeom(pts, W, H, p) {
+  const vs = pts.map(d => d.v), mn = Math.min(...vs) * 0.9, mx = Math.max(...vs) * 1.03, iw = W - p.l - p.r, ih = H - p.t - p.b;
+  const X = i => p.l + iw * (i / (pts.length - 1)), Y = v => p.t + ih * (1 - (v - mn) / (mx - mn));
+  return { X, Y, base: p.t + ih };
+}
+function squarify(items, x, y, w, h) {
+  const total = items.reduce((a, b) => a + b.v, 0), scale = w * h / total, nodes = items.map(it => ({ ...it, area: it.v * scale })), out = [];
+  let rect = { x, y, w, h }, row = [];
+  const worst = (row, side) => { const s = row.reduce((a, b) => a + b.area, 0), mx = Math.max(...row.map(r => r.area)), mn = Math.min(...row.map(r => r.area)); return Math.max(side * side * mx / (s * s), (s * s) / (side * side * mn)); };
+  const lay = row => { const s = row.reduce((a, b) => a + b.area, 0);
+    if (rect.w >= rect.h) { const cw = s / rect.h; let cy = rect.y; for (const r of row) { const ch = r.area / cw; out.push({ ...r, x: rect.x, y: cy, w: cw, h: ch }); cy += ch; } rect = { x: rect.x + cw, y: rect.y, w: rect.w - cw, h: rect.h }; }
+    else { const ch = s / rect.w; let cx = rect.x; for (const r of row) { const cw = r.area / ch; out.push({ ...r, x: cx, y: rect.y, w: cw, h: ch }); cx += cw; } rect = { x: rect.x, y: rect.y + ch, w: rect.w, h: rect.h - ch }; } };
+  let i = 0; while (i < nodes.length) { const side = Math.min(rect.w, rect.h), n = nodes[i]; if (!row.length || worst([...row, n], side) <= worst(row, side)) { row.push(n); i++; } else { lay(row); row = []; } }
+  if (row.length) lay(row);
+  return out;
+}
+// ============================================================
+// Shared bits of copy
+// ============================================================
+const ruleToggle = t => `<button class="rtog ${S.ruleOn ? 'on' : ''}" data-act="rule-toggle"><span class="sw"></span><span>Aplicar a todas com “${esc(ruleKey(t))}”<small>Ligue antes de escolher. Cria uma regra que vale também para as próximas.</small></span></button>`;
+const rulesBody = del => S.rules.length ? S.rules.map((r, i) => `<div class="rule-row"><span>Descrição com “${esc(r.match)}” vira ${CATS[r.cat].label}<small>${countRule(r)} transações nos últimos 6 meses</small></span><button data-act="rule-del" data-arg="${i}" aria-label="Apagar regra">${del}</button></div>`).join('') : `<p class="empty" style="padding:20px 0;text-align:left">Nenhuma regra ainda. Abra uma transação, ligue “aplicar a todas” e escolha a categoria.</p>`;
+const benEmpty = () => `<div class="empty"><b>Nenhum benefício conectado</b><p>Se o Pluggy trouxer vale-refeição, alimentação ou mobilidade, eles aparecem aqui sozinhos.</p></div>`;
+const benSwap = () => `<button class="swap" data-act="ben-empty">${S.benEmpty ? 'Ver com benefícios de exemplo' : 'Ver como fica sem benefícios'}</button>`;
+const toastHTML = () => S.toast ? `<div class="toast" role="status">${S.toast}</div>` : '';
+const TABS = [['mes', 'Resumo'], ['gastos', 'Gastos'], ['tx', 'Transações'], ['pat', 'Patrimônio'], ['ben', 'Benefícios']];
+const monthBound = () => ['mes', 'gastos', 'tx'].includes(S.tab);
+
+// ============================================================
+// The screen (one design; fonts come from CSS variables)
+// ============================================================
+function R() {
+  const P = T(), mo = monthOf(S.month), sum = summarize(S.month), idx = monthIdx();
+  const NUM = "font-family:var(--fn),sans-serif;font-variation-settings:var(--fn-v)", TXT = "font-family:var(--fx),sans-serif;font-variation-settings:var(--fx-v)";
+  const title = { mes: 'Resumo', gastos: 'Gastos', tx: 'Transações', pat: 'Patrimônio', ben: 'Benefícios' }[S.tab];
+  const ic = (name, color, sm) => `<span class="r3-ic ${sm ? 'sm' : ''}" style="color:${color}">${icon(name, { size: sm ? 16 : 18, sw: 1.4 })}</span>`;
+  let b = '';
+  if (S.tab === 'mes') {
+    b += `<div class="r3-hero"><div class="k">Saldo de ${MF[mo.m]}</div><div class="v num" style="color:${sum.saldo < 0 ? P.neg : P.ink}">${signed(sum.saldo)}</div><div class="s">${mo.partial ? `Até ${TODAY.getDate()} de ${MF[TODAY.getMonth()]}, antes do salário` : 'Receitas menos gastos'}</div></div>`;
+    b += `<div style="margin-top:8px">${[['Receitas', sum.receitas, 'income', P.pos, null], ['Gastos', sum.gastos, 't_gastos', P.neg, 'gastos'], ['Aportes', sum.aportes, 'growth', P.acc, 'pat']].map(([k, v, i, c, go]) => `<button class="r3-row" ${go ? `data-act="tab" data-arg="${go}"` : 'data-act="noop"'}>${ic(i, c)}<span class="t"><span class="d">${k}</span></span><span class="r"><b class="num">${fmt(v)}</b></span></button>`).join('')}</div>`;
+    const data = MONTHS.map(m => { const s = summarize(m.key); return { label: m.short, a: s.receitas, b: s.gastos, on: m.key === S.month }; });
+    const W = 330, H = 150, p = { t: 18, b: 22 }, ih = H - p.t - p.b, max = Math.max(...data.flatMap(d => [d.a, d.b])), gw = W / data.length, bw = 8;
+    let svg = `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto"><line x1="0" x2="${W}" y1="${p.t + ih + .5}" y2="${p.t + ih + .5}" stroke="${P.rule}"/>`;
+    data.forEach((d, i) => { const x = gw * i + gw / 2, ha = Math.max(1, ih * d.a / max), hb = Math.max(1, ih * d.b / max);
+      svg += `<path d="${barPath(x - bw - 1, p.t + ih - ha, bw, ha, 3)}" fill="${P.ink}" opacity="${d.on ? 1 : .35}"/><path d="${barPath(x + 1, p.t + ih - hb, bw, hb, 3)}" fill="${P.neg}" opacity="${d.on ? 1 : .45}"/>`;
+      if (d.on) svg += `<text x="${x}" y="${p.t + ih - Math.max(ha, hb) - 6}" text-anchor="middle" font-size="11.5" style="${NUM}" fill="${P.ink}">${fmtK(d.a - d.b)}</text>`;
+      svg += `<text x="${x}" y="${H - 5}" text-anchor="middle" font-size="12" style="${TXT}" fill="${d.on ? P.ink : P.ink2}">${d.label}</text>`; });
+    b += `<section class="r3-sec"><h2 class="r3-h ttl">Seis meses<small>No mês escolhido, o rótulo mostra o saldo</small></h2>${svg}</svg><div class="r3-legend"><span><i style="background:${P.ink}"></i>Receitas</span><span><i style="background:${P.neg}"></i>Gastos</span></div></section>`;
+    b += `<section class="r3-sec"><h2 class="r3-h ttl">Onde mais gastou</h2>${sum.ranked.slice(0, 3).map(g => `<button class="r3-row" data-act="go-cat" data-arg="${g.k}">${ic(g.k === 'outros' ? 'more' : CATS[g.k].icon, g.color)}<span class="t"><span class="d">${g.label}</span><span class="s">${pct(g.v / sum.bruto)} dos gastos</span></span><span class="r"><b class="num">${fmt(g.v)}</b></span></button>`).join('')}</section>`;
+    b += `<p class="r3-fine" style="text-align:center;margin-top:18px">Atualizado hoje às 06:12 pelo Pluggy</p>`;
+  }
+  if (S.tab === 'gastos') {
+    b += `<div class="r3-seg"><button class="${S.gmode === 'cat' ? 'on' : ''}" data-act="gmode" data-arg="cat">Por categoria</button><button class="${S.gmode === 'week' ? 'on' : ''}" data-act="gmode" data-arg="week">Por semana</button></div>`;
+    if (S.gmode === 'cat') {
+      const size = 210, th = 18, r = (size - th) / 2, c = size / 2, C = 2 * Math.PI * r, total = sum.groups.reduce((a, g) => a + g.v, 0); let off = 0;
+      let ring = `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="display:block;margin:4px auto 10px">`;
+      sum.groups.forEach(g => { const len = C * g.v / total; ring += `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${g.color}" stroke-width="${th}" stroke-dasharray="${Math.max(0, len - 2.5)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 ${c} ${c})"/>`; off += len; });
+      ring += `<text x="${c}" y="${c - 8}" text-anchor="middle" font-size="12" style="${TXT}" fill="${P.ink2}">gastos de ${MF[mo.m]}</text><text x="${c}" y="${c + 22}" text-anchor="middle" font-size="28" style="${NUM}" fill="${P.ink}">${fmt0(sum.gastos)}</text></svg>`;
+      b += ring;
+      const top = sum.ranked[0].v;
+      b += sum.ranked.map(g => `<button class="r3-row block" data-act="go-cat" data-arg="${g.k}"><span class="line">${ic(g.k === 'outros' ? 'more' : CATS[g.k].icon, g.color, true)}<span class="t"><span class="d">${g.label}</span>${g.k === 'outros' ? `<span class="s">${GROUP_NOTE}</span>` : ''}</span><span class="r"><b class="num">${fmt(g.v)}</b><small>${pct(g.v / sum.bruto)}</small></span></span><span class="r3-bar"><i style="width:${g.v / top * 100}%;background:${g.color}"></i></span></button>`).join('');
+      if (sum.reemb) b += `<p class="r3-fine">Reembolsos recebidos: <span class="num" style="color:${P.pos}">−${fmt(sum.reemb)}</span>, já descontados do total.</p>`;
+    } else {
+      const ws = sum.weeks.filter(w => !w.future), max = Math.max(1, ...ws.map(w => w.total)), W = 330, H = 190, p = { t: 22, b: 26 }, ih = H - p.t - p.b, gw = W / ws.length, bw = Math.min(30, gw * .45);
+      let svg = `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto"><line x1="0" x2="${W}" y1="${p.t + ih + .5}" y2="${p.t + ih + .5}" stroke="${P.rule}"/>`;
+      ws.forEach((w, i) => { const x = gw * i + gw / 2, h = Math.max(2, ih * w.total / max), y = p.t + ih - h;
+        svg += `<path d="${barPath(x - bw / 2, y, bw, h, 4)}" fill="${P.acc}" opacity="${w.total === max ? 1 : .55}"/><text x="${x}" y="${y - 6}" text-anchor="middle" font-size="12" style="${NUM}" fill="${P.ink}">${fmtK(w.total)}</text><text x="${x}" y="${H - 7}" text-anchor="middle" font-size="12" style="${TXT}" fill="${P.ink2}">${w.start} a ${w.end}</text>`; });
+      b += svg + '</svg>';
+      const avg = ws.reduce((a, w) => a + w.total, 0) / (ws.length || 1);
+      b += `<p class="r3-fine">Média por semana: <span class="num" style="color:${P.ink}">${fmt(avg)}</span>. Semanas de segunda a domingo; a mais cheia aparece mais forte.</p>`;
+      b += `<div style="margin-top:12px">${ws.map((w, i) => `<button class="r3-row" data-act="go-week" data-arg="${i}"><span class="t"><span class="d">${w.start} a ${w.end} de ${MF[mo.m]}</span><span class="s">${w.n} compras</span></span><span class="r"><b class="num">${fmt(w.total)}</b></span></button>`).join('')}</div>`;
+    }
+  }
+  if (S.tab === 'tx') {
+    b += `<nav class="r3-accs">${Object.entries(ACC_TAB).map(([k, l]) => `<button class="${S.acc === k ? 'on' : ''}" data-act="acc" data-arg="${k}">${l}</button>`).join('')}</nav>`;
+    if (S.cat || S.week != null) b += `<button class="r3-filter" data-act="clear">${S.cat ? GROUP_LABEL(S.cat) : `Semana de ${sum.weeks[S.week].start} a ${sum.weeks[S.week].end}`} <span aria-hidden="true">✕</span></button>`;
+    const list = txList(sum);
+    if (!list.length) b += `<div class="empty"><p>Nada por aqui neste mês.</p></div>`;
+    for (const g of groupByDay(list)) b += `<div class="r3-day">${dayLong(g.date)}</div>${g.items.map(t => { const v = txInfo(t), src = t.kind === 'gasto' ? catSource(t) : 'pluggy'; return `<button class="r3-row ${v.muted ? 'muted' : ''}" data-act="tx-open" data-arg="${t.id}">${ic(v.icon, v.color)}<span class="t"><span class="d">${esc(t.desc)}</span><span class="s">${v.label}${src !== 'pluggy' ? `, <em>${src === 'regra' ? 'por regra' : 'mudada por você'}</em>` : ''}${v.tag ? `, ${v.tag}` : ''}</span></span><span class="r"><b class="num" style="${t.amount > 0 ? `color:${P.pos}` : ''}">${signed(t.amount)}</b><small>${ACC[t.acc].short}</small></span></button>`; }).join('')}`;
+  }
+  if (S.tab === 'pat') {
+    const { cur, prev, ser } = patNow(), W = 330, H = 170, p = { l: 10, r: 10, t: 14, b: 24 }, g = lineGeom(ser, W, H, p);
+    let svg = `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto"><line x1="0" x2="${W}" y1="${g.base + .5}" y2="${g.base + .5}" stroke="${P.rule}"/>`;
+    for (let i = 0; i < ser.length - 1; i++) svg += `<line x1="${g.X(i)}" y1="${g.Y(ser[i].v)}" x2="${g.X(i + 1)}" y2="${g.Y(ser[i + 1].v)}" stroke="${ser[i].est ? P.ink2 : P.acc}" stroke-width="2.5" stroke-linecap="round" opacity="${ser[i].est ? .55 : 1}"/>`;
+    ser.forEach((q, i) => { svg += `<circle cx="${g.X(i)}" cy="${g.Y(q.v)}" r="4.5" fill="${q.est ? P.bg : P.acc}" stroke="${q.est ? P.ink2 : P.acc}" stroke-width="2"/><text x="${g.X(i)}" y="${H - 6}" text-anchor="middle" font-size="12" style="${TXT}" fill="${P.ink2}">${q.label}</text>`; });
+    b += `<div class="r3-hero"><div class="k">Patrimônio hoje</div><div class="v num">${fmt(cur)}</div><div class="s" style="color:${P.pos}">${signed(cur - prev)} desde o fim de outubro</div></div><div style="margin-top:14px">${svg}</svg></div><div class="r3-legend"><span><i style="background:${P.ink2};opacity:.55"></i>Estimado pelas movimentações</span><span><i style="background:${P.acc}"></i>Retratos do app</span></div>`;
+    let x = 0, seg = ''; PAT.classes.forEach((c, i) => { const w = 330 * c.value / cur; seg += `<rect x="${x + (i ? 1 : 0)}" y="0" width="${Math.max(2, w - (i ? 2 : 0))}" height="10" fill="${P.classes[c.key]}"/>`; x += w; });
+    b += `<section class="r3-sec"><h2 class="r3-h ttl">Por classe</h2><svg viewBox="0 0 330 10" style="display:block;width:100%;height:auto;margin:6px 0 4px;clip-path:inset(0 round 5px)">${seg}</svg>`;
+    b += PAT.classes.map(c => `<button class="r3-row" data-act="pat-open" data-arg="${c.key}"><span class="r3-ic sm" style="color:${P.classes[c.key]}"><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg></span><span class="t"><span class="d">${c.name}</span><span class="s">${pct(c.value / cur)} do total</span></span><span class="r"><b class="num">${fmt(c.value)}</b></span></button>${S.patOpen === c.key ? `<div class="r3-items">${c.items.map(([n, v]) => `<div><span>${n}</span><span class="num">${fmt(v)}</span></div>`).join('')}</div>` : ''}`).join('') + '</section>';
+  }
+  if (S.tab === 'ben') {
+    if (S.benEmpty) b += benEmpty();
+    else {
+      b += `<div class="r3-hero"><div class="k">Saldo nos benefícios</div><div class="v num">${fmt(benTotal())}</div><div class="s">${BEN.provider}</div></div>`;
+      b += `<div style="margin-top:8px">${BEN.items.map(i => `<div class="r3-row">${ic(i.icon, P.acc)}<span class="t"><span class="d">${i.name}</span></span><span class="r"><b class="num">${fmt(i.balance)}</b></span></div>`).join('')}</div>`;
+      b += `<section class="r3-sec"><h2 class="r3-h ttl">Movimentações</h2>${BEN.tx.map(t => `<div class="r3-row"><span class="t"><span class="d">${t.desc}</span><span class="s">${t.wallet}, ${dayShort(t.date)}</span></span><span class="r"><b class="num" style="${t.amount > 0 ? `color:${P.pos}` : ''}">${signed(t.amount)}</b></span></div>`).join('')}</section>`;
+    }
+    b += benSwap();
+  }
+  const head = `<header class="r3-head"><div class="r3-top"><h1 class="r3-title ttl">${title}</h1>${S.tab === 'tx' ? `<button class="r3-link" data-act="rules">Regras${S.rules.length ? ` (${S.rules.length})` : ''}</button>` : ''}</div>${monthBound() ? `<div class="r3-month"><button data-act="month-prev" ${idx === 0 ? 'disabled' : ''} aria-label="Mês anterior">‹</button><span>${mo.label}</span>${mo.partial ? '<em>em andamento</em>' : ''}<button data-act="month-next" ${idx === MONTHS.length - 1 ? 'disabled' : ''} aria-label="Próximo mês">›</button></div>` : ''}</header>`;
+  const tabs = `<nav class="r3-tabs">${TABS.map(([k, l]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}">${icon('t_' + k, { size: 22, sw: S.tab === k ? 1.7 : 1.3 })}${l}</button>`).join('')}</nav>`;
+  let sheet = '';
+  if (S.sheet && S.sheet.tx) {
+    const t = findTx(S.sheet.tx), v = txInfo(t);
+    sheet = `<div class="sheet-bg" data-act="sheet-close"><div class="sheet" data-act="noop"><div class="r3-sh-d">${esc(t.desc)}</div><div class="r3-sh-v num" style="${t.amount > 0 ? `color:${P.pos}` : ''}">${signed(t.amount)}</div><p class="r3-sub">${dayLong(t.date)}, ${ACC[t.acc].name}</p>${t.kind === 'gasto' ? `<p class="r3-fine">${srcLabel(t)}.</p>${ruleToggle(t)}<div class="r3-cats">${Object.entries(CATS).map(([k, c]) => `<button class="${effCat(t) === k ? 'on' : ''}" data-act="recat" data-arg="${k}" data-tx="${t.id}"><span style="color:${catColor(k)}">${icon(c.icon, { size: 18, sw: 1.4 })}</span>${c.label}</button>`).join('')}</div>` : `<p class="r3-fine" style="font-size:13.5px">${v.note || v.label + '.'}</p>`}</div></div>`;
+  }
+  if (S.sheet && S.sheet.rules) sheet = `<div class="sheet-bg" data-act="sheet-close"><div class="sheet" data-act="noop"><h2 class="r3-h ttl" style="font-size:24px">Regras de categoria</h2>${rulesBody('✕')}</div></div>`;
+  return `<div class="r3 ${S.mode === 'dark' ? 'dark' : ''} ${FONTS[S.variant].cls}">${head}<main class="r3-main" data-scroll="${S.tab}-${S.gmode}">${b}</main>${tabs}${sheet}${toastHTML()}</div>`;
+}
+
+// ============================================================
+// Notes panel, actions, render loop
+// ============================================================
+function renderNotes() {
+  const f = FONTS[S.variant], rules = S.rules.length ? S.rules.map(r => `  “${r.match}” vira ${CATS[r.cat].label}`).join('\n') : '  nenhuma';
+  document.getElementById('notes').innerHTML = `<span class="n-tag">PROTÓTIPO · DESCARTÁVEL</span><h1>Refino do v1</h1><p style="font-size:13px;opacity:.75">Rodada 3. Um visual só, montado a partir do que você aprovou: layout, ícones e texto da Cédula, fundo branco ou preto. Saíram a nota, as hachuras, os tracejados e a Bodoni.</p><h2>${S.variant}. ${f.name}</h2><p>${f.idea}</p>
+  <h3>Para reparar</h3><ul>
+  <li>Fique numa aba e troque a fonte com ← →.</li>
+  <li>Use o botão de lua e sol para ver o modo escuro.</li>
+  <li>Os números grandes (saldo, patrimônio) e os valores das listas ficaram bons?</li>
+  <li>O resumo sem a nota: saldo grande e as três linhas abaixo. Falta alguma coisa?</li>
+  <li>Patrimônio: o trecho estimado agora é cinza, sem tracejado. Ficou claro?</li></ul>
+  <h3>Estado (em memória)</h3><div class="state">fonte: ${f.name}
+modo: ${S.mode === 'dark' ? 'escuro' : 'claro'}
+aba: ${S.tab}
+mês: ${S.month}
+regras:
+${esc(rules)}
+ajustes manuais: ${Object.keys(S.overrides).length}</div>
+  <p class="fine">Dados inventados no formato da sua planilha. Nenhum valor é real. As cores de categoria passaram no validador de daltonismo nos dois modos.</p>`;
+}
+let toastTimer;
+function toast(msg) { S.toast = msg; clearTimeout(toastTimer); toastTimer = setTimeout(() => { S.toast = null; render(); }, 3000); }
+function applyRecat(id, cat) {
+  const t = findTx(id);
+  if (S.ruleOn) {
+    const key = ruleKey(t);
+    S.rules = S.rules.filter(r => r.match.toLowerCase() !== key.toLowerCase()); S.rules.unshift({ match: key, cat });
+    ALL_TX.forEach(x => { if (ruleKey(x).toLowerCase().includes(key.toLowerCase())) delete S.overrides[x.id]; });
+    toast(`Regra criada: “${esc(key)}” vira ${CATS[cat].label} em ${countRule(S.rules[0])} transações`);
+  } else { S.overrides[id] = cat; toast(`“${esc(t.desc)}” agora é ${CATS[cat].label}`); }
+  S.ruleOn = false;
+}
+function setVariant(v) { S.variant = v; try { const u = new URL(location.href); u.searchParams.set('variant', v); history.replaceState(null, '', u); } catch (e) { /* file:// may refuse */ } }
+const shiftMonth = d => { S.month = MONTHS[Math.min(MONTHS.length - 1, Math.max(0, monthIdx() + d))].key; S.week = null; };
+const ACT = {
+  'variant-prev': () => setVariant(ORDER[(ORDER.indexOf(S.variant) + 2) % 3]), 'variant-next': () => setVariant(ORDER[(ORDER.indexOf(S.variant) + 1) % 3]),
+  'mode': () => { S.mode = S.mode === 'dark' ? 'light' : 'dark'; },
+  'month-prev': () => shiftMonth(-1), 'month-next': () => shiftMonth(1),
+  'tab': t => { S.tab = t; S.sheet = null; if (t !== 'tx') { S.cat = null; S.week = null; } },
+  'gmode': m => { S.gmode = m; }, 'acc': a => { S.acc = a; },
+  'go-cat': c => { S.tab = 'tx'; S.cat = c; S.week = null; S.acc = 'all'; }, 'go-week': i => { S.tab = 'tx'; S.week = +i; S.cat = null; S.acc = 'all'; },
+  'clear': () => { S.cat = null; S.week = null; }, 'pat-open': k => { S.patOpen = S.patOpen === k ? null : k; },
+  'rules': () => { S.sheet = { rules: true }; }, 'sheet-close': () => { S.sheet = null; },
+  'tx-open': id => { S.ruleOn = false; S.sheet = { tx: id }; }, 'rule-toggle': () => { S.ruleOn = !S.ruleOn; },
+  'recat': (cat, el) => { applyRecat(el.dataset.tx, cat); S.sheet = null; }, 'rule-del': i => { S.rules.splice(+i, 1); },
+  'ben-empty': () => { S.benEmpty = !S.benEmpty; },
+};
+function render() {
+  const app = document.getElementById('app');
+  app.querySelectorAll('[data-scroll]').forEach(el => { SCROLL[el.dataset.scroll] = el.scrollTop; });
+  app.innerHTML = R();
+  app.querySelectorAll('[data-scroll]').forEach(el => { const y = SCROLL[el.dataset.scroll]; if (y) el.scrollTop = y; });
+  document.getElementById('sw-label').textContent = `${S.variant}. ${FONTS[S.variant].name}`;
+  document.getElementById('sw-mode').textContent = S.mode === 'dark' ? '☀' : '☾';
+  document.body.classList.toggle('dark-stage', S.mode === 'dark');
+  renderNotes();
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const act = el.getAttribute('data-act'); if (act === 'noop') return;
+  const fn = ACT[act]; if (!fn) return;
+  fn(el.getAttribute('data-arg'), el); render();
+});
+document.addEventListener('keydown', e => {
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
+  if (e.key === 'ArrowLeft') { ACT['variant-prev'](); render(); }
+  if (e.key === 'ArrowRight') { ACT['variant-next'](); render(); }
+});
+S.mode = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+const q = new URLSearchParams(location.search), qv = (q.get('variant') || '').toUpperCase();
+if (ORDER.includes(qv)) S.variant = qv;
+if (q.get('mode') === 'dark' || q.get('mode') === 'light') S.mode = q.get('mode');
+render();
+if (document.fonts) document.fonts.ready.then(render);
+</script>
+</body>
+</html>
