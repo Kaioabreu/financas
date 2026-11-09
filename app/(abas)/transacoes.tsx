@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { FlatList, Linking, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { BillGap } from "../../src/core/bills";
+import { embeddedConfig } from "../../src/core/config";
 import type { AccountSummary, ConnectionSummary, TransactionRow } from "../../src/core/connections";
 import { useCore } from "../../src/shell/appCore";
 import { MonthBar } from "../../src/shell/MonthBar";
@@ -28,6 +30,7 @@ export default function Transacoes() {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [gaps, setGaps] = useState<BillGap[]>([]);
   const [cpf, setCpf] = useState<CpfStatus | null>(null);
   const router = useRouter();
   const [editing, setEditing] = useState<TransactionRow | null>(null);
@@ -51,6 +54,9 @@ export default function Transacoes() {
       setAccounts(list);
       setConnections(await core.listConnections());
       setCpf(await core.cpfStatus());
+      const card = list.find((a) => a.id === (selected ?? list[0]?.id));
+      const found = card?.kind === "card" && !filtered ? await core.billGaps({ month, accountId: card.id }) : [];
+      if (alive) setGaps(found);
       const id = selected ?? list[0]?.id ?? null;
       if (id !== selected) setSelected(id);
       // Coming from Gastos, the list covers every account and only what that slice summed.
@@ -112,6 +118,14 @@ export default function Transacoes() {
           </Pressable>
         </View>
       ) : null}
+      {gaps.map((g) => (
+        <View key={g.billId} style={{ paddingHorizontal: 24, marginTop: 8 }}>
+          <Fine>
+            {g.text} ·{" "}
+            <LinkText onPress={() => Linking.openURL(`${embeddedConfig.guideUrl}#faltam-compras-numa-fatura`)}>Saiba mais</LinkText>
+          </Fine>
+        </View>
+      ))}
       {dataAt ? <View style={{ paddingHorizontal: 24, marginTop: 8 }}><Fine>Dados de {dataAt}</Fine></View> : null}
       {notice ? <View style={{ paddingHorizontal: 24, marginTop: 4 }}><Fine>{notice}</Fine></View> : null}
       {cpf?.state === "needed" && accounts.length ? (

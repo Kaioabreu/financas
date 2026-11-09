@@ -1,16 +1,20 @@
 import Constants from "expo-constants";
 import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
-import { openDatabaseAsync } from "expo-sqlite";
+import { openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 import { drizzle } from "drizzle-orm/expo-sqlite";
 import { migrate } from "drizzle-orm/expo-sqlite/migrator";
 import migrations from "../../drizzle/migrations";
 import { openVault, type RawDatabase } from "../core/vault";
 import * as schema from "../db/schema";
 
+/** The open database, for the Backup export (ATTACH + sqlcipher_export). */
+export let appSqlite: SQLiteDatabase | null = null;
+
 export async function openAppVault() {
   const databaseName = (Constants.expoConfig?.extra?.databaseName as string) ?? "finance.db";
   const sqlite = await openDatabaseAsync(databaseName);
+  appSqlite = sqlite;
 
   const database: RawDatabase = {
     execute: (sql) => sqlite.execAsync(sql),
