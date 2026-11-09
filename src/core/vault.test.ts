@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CipherUnavailableError, openVault, type VaultPorts } from "./vault";
+import { CipherUnavailableError, openVault, UnreadableDatabaseError, type VaultPorts } from "./vault";
 
 function fakePorts(overrides: Partial<VaultPorts<string>> = {}) {
   const log: string[] = [];
@@ -13,6 +13,7 @@ function fakePorts(overrides: Partial<VaultPorts<string>> = {}) {
     database: {
       execute: async (sql) => void log.push(`exec:${sql}`),
       queryCipherVersion: async () => "4.5.7 community",
+      canRead: async () => true,
       close: async () => void log.push("close"),
     },
     createOrm: () => {
@@ -67,5 +68,25 @@ describe("openVault", () => {
     ports.database.queryCipherVersion = async () => "";
 
     await expect(openVault(ports)).rejects.toBeInstanceOf(CipherUnavailableError);
+  });
+
+  it("banco que a chave não abre: não migra, não grava a chave nova e deixa o arquivo como está", async () => {
+    const { ports, log, store } = fakePorts();
+    ports.database.canRead = async () => false;
+
+    await expect(openVault(ports)).rejects.toBeInstanceOf(UnreadableDatabaseError);
+    expect(store.has("db-key")).toBe(false);
+    expect(log).not.toContain("createOrm");
+    expect(log).not.toContain("migrate");
+    expect(log).toContain("close");
+  });
+
+  it("com a chave guardada que não abre o banco, também avisa em vez de falhar com erro cru", async () => {
+    const { ports, store } = fakePorts();
+    store.set("db-key", "ab".repeat(32));
+    ports.database.canRead = async () => false;
+
+    await expect(openVault(ports)).rejects.toBeInstanceOf(UnreadableDatabaseError);
+    expect(store.get("db-key")).toBe("ab".repeat(32));
   });
 });

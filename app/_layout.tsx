@@ -6,6 +6,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { Core } from "../src/core/createCore";
 import { CoreProvider, createAppCore } from "../src/shell/appCore";
 import { openAppVault } from "../src/shell/openDatabase";
+import { UnreadableDatabase } from "../src/shell/UnreadableDatabase";
+import { UnreadableDatabaseError } from "../src/core/vault";
 import { usePalette } from "../src/shell/theme";
 import { LockScreen } from "../src/shell/LockScreen";
 import { ErrorScreen } from "../src/shell/ErrorScreen";
@@ -15,7 +17,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
   return <ErrorScreen error={error} retry={retry} />;
 }
 
-type State = { status: "opening" } | { status: "open"; core: Core } | { status: "failed"; message: string };
+type State = { status: "opening" } | { status: "open"; core: Core } | { status: "unreadable" } | { status: "failed"; message: string };
 
 export default function RootLayout() {
   const [state, setState] = useState<State>({ status: "opening" });
@@ -31,7 +33,11 @@ export default function RootLayout() {
         setState({ status: "open", core });
       },
       (error: unknown) =>
-        setState({ status: "failed", message: error instanceof Error ? error.message : String(error) }),
+        setState(
+          error instanceof UnreadableDatabaseError
+            ? { status: "unreadable" }
+            : { status: "failed", message: error instanceof Error ? error.message : String(error) },
+        ),
     );
   }, []);
 
@@ -49,6 +55,13 @@ export default function RootLayout() {
       <View style={[styles.center, { backgroundColor: c.bg }]}>
         <ActivityIndicator />
       </View>
+    );
+  }
+  if (state.status === "unreadable") {
+    return (
+      <SafeAreaProvider>
+        <UnreadableDatabase onOpen={(core) => setState({ status: "open", core })} />
+      </SafeAreaProvider>
     );
   }
   return (
