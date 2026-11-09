@@ -266,6 +266,29 @@ describe("Sincronização: PARTIAL_SUCCESS e trava", () => {
     expect((await w.core.listConnections())[0]).toMatchObject({ dataAt: "2026-11-01T06:00:00.000Z" });
   });
 
+  it("produto sem isUpdated é tentado de novo na próxima sincronização, sem esperar o Pluggy mudar", async () => {
+    const w = await world();
+    w.state.cardTxs = [tx(50, { accountId: CARD })];
+    await w.core.readConnection(ITEM_ID);
+    w.state.cardTxs = [tx(50, { accountId: CARD, description: "MUDOU" })];
+    w.newData({
+      executionStatus: "PARTIAL_SUCCESS",
+      statusDetail: {
+        transactions: { isUpdated: true, updatedAt: "2026-11-06T06:00:00.000Z" },
+        creditCards: { isUpdated: false, updatedAt: "2026-11-01T06:00:00.000Z" },
+      },
+    });
+    await w.core.sync({ manual: false });
+
+    // Same item date, now with the card product updated: it must be read, not skipped.
+    w.newData();
+    const before = accountReads(w);
+    await w.core.sync({ manual: false });
+
+    expect(accountReads(w)).toBe(before + 1);
+    expect((await w.core.listTransactions({ accountId: CARD, month: "2026-10" }))[0]!.description).toBe("MUDOU");
+  });
+
   it("a trava: apagar mais de 20% de um produto grava o novo, não apaga nada e não avança a data", async () => {
     const w = await world();
     w.setTxs([tx(1), tx(2), tx(3), tx(4), tx(5)]);

@@ -300,6 +300,9 @@ export function createSync(deps: Deps): SyncApi {
     const previous: Record<string, string> = conn.productDates ? JSON.parse(conn.productDates) : {};
     const dates = { ...previous };
     for (const product of PRODUCTS) if (updated(product)) dates[product] = dateOf(product) ?? previous[product] ?? "";
+    // A product Pluggy did not update keeps its own date and the attempt stays incomplete, so the next
+    // sync retries it instead of skipping the item because its lastUpdatedAt was already "read".
+    const partial = PRODUCTS.some((product) => !updated(product));
     const known = Object.values(dates).filter(Boolean).sort();
 
     if (locked) {
@@ -327,10 +330,10 @@ export function createSync(deps: Deps): SyncApi {
         locked
           ? { attemptComplete: false, lockTriggered: true, readState: "done" }
           : {
-              attemptComplete: true,
+              attemptComplete: !partial,
               lockTriggered: false,
               readState: "done",
-              lastReadAt: lastUpdatedAt,
+              lastReadAt: partial ? (conn.lastReadAt ?? lastUpdatedAt) : lastUpdatedAt,
               productDates: JSON.stringify(dates),
               dataAt: known[0] ?? lastUpdatedAt,
             },
