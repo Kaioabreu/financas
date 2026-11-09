@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { otaId } from "./ota";
 import * as Crypto from "expo-crypto";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Network from "expo-network";
@@ -40,7 +41,7 @@ export function createAppCore(orm: unknown): Core {
       if (!state || state.isConnected === false) return "offline";
       return state.type === Network.NetworkStateType.WIFI || state.type === Network.NetworkStateType.ETHERNET ? "wifi" : "cellular";
     },
-    env: { appVersion: Constants.expoConfig?.version ?? "?", otaId: Constants.manifest2?.id ?? null },
+    env: { appVersion: Constants.expoConfig?.version ?? "?", otaId },
   });
   return currentCore;
 }
