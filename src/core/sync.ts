@@ -53,6 +53,8 @@ interface Deps {
   moveEdits?: (newIds: string[]) => Promise<void>;
   /** True while Pluggy refuses the credentials: nothing syncs. */
   credentialsRefused?: () => Promise<boolean>;
+  /** Writes the Retrato of the Connection for today; `unavailable` when Pluggy flagged a resource. */
+  takeSnapshot?: (itemId: string, unavailable: boolean) => Promise<void>;
 }
 
 type Product = "accounts" | "creditCards" | "transactions" | "investments" | "investmentsTransactions" | "identity";
@@ -202,6 +204,19 @@ export function createSync(deps: Deps): SyncApi {
       } else if (response.status !== 404) throw new Error(`identity ${response.status}`);
     }
 
+    // Resources Pluggy marks UNAVAILABLE: the bank may be holding something back (best effort).
+    let unavailable = false;
+    try {
+      const response = await call(`/items/${itemId}/resources`);
+      if (response.status === 200) {
+        const body = await json(response);
+        const list: any[] = Array.isArray(body) ? body : Array.isArray(body?.results) ? body.results : [];
+        unavailable = list.some((r) => r?.status === "UNAVAILABLE");
+      }
+    } catch {
+      /* the flag is optional */
+    }
+
     // ---- 2. Plan the mirror against what is stored. ----
     const plans: Plan[] = [];
 
@@ -304,6 +319,7 @@ export function createSync(deps: Deps): SyncApi {
         await deps.moveEdits(now.map((t) => t.id).filter((id) => !knownIds.has(id)));
       }
       if (fetchedIdentity) await upsertIdentity(fetchedIdentity, itemId);
+      if (!locked) await deps.takeSnapshot?.(itemId, unavailable);
       await setConnection(
         itemId,
         locked

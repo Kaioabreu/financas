@@ -1,4 +1,4 @@
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const appMeta = sqliteTable("app_meta", {
   key: text("key").primaryKey(),
@@ -139,3 +139,18 @@ export const manualEdit = sqliteTable("manual_edit", {
   category: text("category"),
   origin: text("origin"),
 });
+
+/**
+ * A Retrato: what one Connection was worth on one day (JSON: lines per class, debt as negative,
+ * and whether Pluggy signalled something missing). At most one per Connection and day; the last wins.
+ */
+export const snapshot = sqliteTable(
+  "snapshot",
+  {
+    /** YYYY-MM-DD. */
+    date: text("date").notNull(),
+    itemId: text("item_id").notNull(),
+    payload: text("payload").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.date, t.itemId] })],
+);

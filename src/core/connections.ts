@@ -1,6 +1,6 @@
 // Core: connecting a bank through Meu Pluggy, and the first read of its data.
 import { and, desc, eq, inArray, like, ne } from "drizzle-orm";
-import { account, bankTransaction, bill, connection, identity, investment, investmentTransaction } from "../db/schema";
+import { account, bankTransaction, bill, connection, identity, investment, investmentTransaction, snapshot } from "../db/schema";
 import type { Classification, ClassificationSource, ClassifiedAs } from "./classification";
 import type { EmbeddedConfig } from "./config";
 import type { CoreDatabase } from "./createCore";
@@ -198,6 +198,7 @@ export function createConnections(deps: Deps): ConnectionsApi {
     await db.update(account).set({ itemId: newItemId }).where(eq(account.itemId, oldItemId));
     await db.update(investment).set({ itemId: newItemId }).where(eq(investment.itemId, oldItemId));
     await db.update(identity).set({ itemId: newItemId }).where(eq(identity.itemId, oldItemId));
+    await db.update(snapshot).set({ itemId: newItemId }).where(eq(snapshot.itemId, oldItemId));
     await db.delete(connection).where(eq(connection.itemId, oldItemId));
     await deleteItem(oldItemId);
   }
@@ -218,6 +219,7 @@ export function createConnections(deps: Deps): ConnectionsApi {
       await db.delete(investment).where(eq(investment.itemId, itemId));
       await db.delete(account).where(eq(account.itemId, itemId));
       await db.delete(identity).where(eq(identity.itemId, itemId));
+      await db.delete(snapshot).where(eq(snapshot.itemId, itemId));
       await db.delete(connection).where(eq(connection.itemId, itemId));
     },
 
