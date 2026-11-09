@@ -4,13 +4,11 @@ import { openDatabaseAsync } from "expo-sqlite";
 import { drizzle } from "drizzle-orm/expo-sqlite";
 import { migrate } from "drizzle-orm/expo-sqlite/migrator";
 import migrations from "../../drizzle/migrations";
+import { backupFileName } from "../core/backupName";
 import type { BackupFilePort } from "../core/restore";
 import { appSqlite } from "./openDatabase";
 
 const quote = (value: string) => `'${value.replace(/'/g, "''")}'`;
-
-/** financas-backup-AAAA-MM-DD.financas */
-export const backupFileName = (now: number) => `financas-backup-${new Date(now).toISOString().slice(0, 10)}.financas`;
 
 /**
  * Writes the whole database (migrations table included, but not the Client Secret or the database key,
