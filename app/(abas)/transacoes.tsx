@@ -4,7 +4,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AccountSummary, ConnectionSummary, TransactionRow } from "../../src/core/connections";
 import { useCore } from "../../src/shell/appCore";
 import { monthLabel, shiftMonth, useMonth } from "../../src/shell/month";
-import { Body, Fine, font, usePalette } from "../../src/shell/theme";
+import { useRouter } from "expo-router";
+import type { CpfStatus } from "../../src/core/classification";
+import { categoryLabel, natureLabel, originLabel } from "../../src/shell/labels";
+import { Body, Fine, font, LinkText, usePalette } from "../../src/shell/theme";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -19,6 +22,8 @@ export default function Transacoes() {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [cpf, setCpf] = useState<CpfStatus | null>(null);
+  const router = useRouter();
 
   const refresh = async () => {
     setRefreshing(true);
@@ -38,6 +43,7 @@ export default function Transacoes() {
       if (!alive) return;
       setAccounts(list);
       setConnections(await core.listConnections());
+      setCpf(await core.cpfStatus());
       const id = selected ?? list[0]?.id ?? null;
       if (id !== selected) setSelected(id);
       if (id) {
@@ -91,6 +97,11 @@ export default function Transacoes() {
       </ScrollView>
       {dataAt ? <View style={{ paddingHorizontal: 24, marginTop: 8 }}><Fine>Dados de {dataAt}</Fine></View> : null}
       {notice ? <View style={{ paddingHorizontal: 24, marginTop: 4 }}><Fine>{notice}</Fine></View> : null}
+      {cpf?.state === "needed" && accounts.length ? (
+        <View style={{ paddingHorizontal: 24, marginTop: 4 }}>
+          <LinkText onPress={() => router.push("/cpf")}>Informe o seu CPF para reconhecer as transferências entre as suas contas</LinkText>
+        </View>
+      ) : null}
       <FlatList
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         style={{ marginTop: 12 }}
@@ -115,7 +126,11 @@ export default function Transacoes() {
           >
             <View style={{ flex: 1 }}>
               <Body>{item.description}</Body>
-              <Fine>{item.date.split("-").reverse().join("/")}</Fine>
+              <Fine>
+                {item.date.split("-").reverse().join("/")} · {natureLabel[item.nature]}
+                {item.category ? ` · ${categoryLabel[item.category].icon} ${categoryLabel[item.category].name}` : ""}
+                {item.origin ? ` · ${originLabel[item.origin]}` : ""}
+              </Fine>
             </View>
             <Text style={{ fontFamily: font.medium, fontSize: 16, color: item.amount < 0 ? c.ink : c.acc }}>
               {brl.format(item.amount)}

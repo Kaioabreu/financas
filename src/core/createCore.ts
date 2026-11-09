@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import type { EmbeddedConfig } from "./config";
 import { appMeta } from "../db/schema";
+import { createClassification, type ClassificationApi } from "./classification";
 import { createConnections, type ConnectionsApi } from "./connections";
 import { createSync, type SyncApi } from "./sync";
 
@@ -44,7 +45,7 @@ export interface CredentialsError {
 export type SaveCredentialsResult = { ok: true } | { ok: false; error: CredentialsError };
 export type CredentialsStatus = { saved: false } | { saved: true; clientId: string };
 
-export interface Core extends ConnectionsApi, SyncApi {
+export interface Core extends ConnectionsApi, SyncApi, ClassificationApi {
   credentialsStatus(): Promise<CredentialsStatus>;
   /** Checks the credentials with Pluggy (POST /auth) and saves them only on a 200. */
   saveCredentials(input: Credentials): Promise<SaveCredentialsResult>;
@@ -116,7 +117,10 @@ export function createCore(deps: CoreDeps): Core {
     });
   };
 
+  const classification = createClassification({ db, config });
+
   const connections = createConnections({
+    classify: classification.classify,
     db,
     config,
     clock: deps.clock,
@@ -134,6 +138,8 @@ export function createCore(deps: CoreDeps): Core {
   return {
     ...connections,
     ...sync,
+    cpfStatus: classification.cpfStatus,
+    setCpf: classification.setCpf,
     async credentialsStatus() {
       const clientId = await readMeta(CLIENT_ID_KEY);
       const secret = await deps.secret.get();
