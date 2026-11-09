@@ -38,7 +38,7 @@ export default function Entry() {
       sub={hasAny ? undefined : "Seus dados aparecem aqui depois da primeira leitura."}
       footer={
         <>
-          {hasAny ? <Button label="Ver meus dados" onPress={() => router.push("/transacoes")} /> : null}
+          {hasAny ? <Button label="Ver meus dados" onPress={() => router.push("/resumo")} /> : null}
           <Button
             label={hasAny ? `Conectar outro banco · ${connections.length} de ${MAX_BANKS}` : "Conectar um banco"}
             secondary={hasAny}
