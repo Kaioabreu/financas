@@ -1,6 +1,7 @@
 // Core: connecting a bank through Meu Pluggy, and the first read of its data.
 import { and, desc, eq, like } from "drizzle-orm";
 import { account, bankTransaction, connection } from "../db/schema";
+import type { Classification } from "./classification";
 import type { EmbeddedConfig } from "./config";
 import type { CoreDatabase } from "./createCore";
 
@@ -38,6 +39,10 @@ export interface TransactionRow {
   date: string;
   /** amountInAccountCurrency when Pluggy filled it, otherwise amount. */
   amount: number;
+  /** The classification, computed from the raw fields and the embedded configuration. */
+  nature: Classification["nature"];
+  category?: Classification["category"];
+  origin?: Classification["origin"];
 }
 
 export interface ConnectionsApi {
@@ -60,6 +65,7 @@ interface Deps {
   clock: () => number;
   sleep: (ms: number) => Promise<void>;
   request: (method: string, path: string, body?: unknown) => Promise<Response>;
+  classify: (ids: string[]) => Promise<Map<string, Classification>>;
 }
 
 interface PluggyItem {
@@ -195,11 +201,13 @@ export function createConnections(deps: Deps): ConnectionsApi {
         .from(bankTransaction)
         .where(and(eq(bankTransaction.accountId, accountId), like(bankTransaction.date, `${month}-%`)))
         .orderBy(desc(bankTransaction.date));
+      const classes = await deps.classify(rows.map((r) => r.id));
       return rows.map((r) => ({
         id: r.id,
         description: r.description,
         date: r.date.slice(0, 10),
         amount: r.amountInAccountCurrency ?? r.amount,
+        ...classes.get(r.id)!,
       }));
     },
   };

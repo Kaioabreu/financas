@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import type { EmbeddedConfig } from "./config";
 import { appMeta } from "../db/schema";
+import { createClassification, type ClassificationApi } from "./classification";
 import { createConnections, type ConnectionsApi } from "./connections";
 import { createSync, type SyncApi } from "./sync";
 import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
@@ -47,8 +48,8 @@ export interface CredentialsError {
 export type SaveCredentialsResult = { ok: true } | { ok: false; error: CredentialsError };
 export type CredentialsStatus = { saved: false } | { saved: true; clientId: string };
 
-export interface Core extends ConnectionsApi, SyncApi {
-  /** The "Copiar diagnóstico" text: only allow-listed facts, never amounts, names or ids. */
+export interface Core extends ConnectionsApi, SyncApi, ClassificationApi {
+  /** The "Copiar diagnÃ³stico" text: only allow-listed facts, never amounts, names or ids. */
   diagnostic(): Promise<string>;
   credentialsStatus(): Promise<CredentialsStatus>;
   /** Checks the credentials with Pluggy (POST /auth) and saves them only on a 200. */
@@ -132,7 +133,10 @@ export function createCore(deps: CoreDeps): Core {
     return response;
   };
 
+  const classification = createClassification({ db, config });
+
   const connections = createConnections({
+    classify: classification.classify,
     db,
     config,
     clock: deps.clock,
@@ -151,6 +155,8 @@ export function createCore(deps: CoreDeps): Core {
   return {
     ...connections,
     ...sync,
+    cpfStatus: classification.cpfStatus,
+    setCpf: classification.setCpf,
     diagnostic: () => diagnostics.build(),
     async credentialsStatus() {
       const clientId = await readMeta(CLIENT_ID_KEY);

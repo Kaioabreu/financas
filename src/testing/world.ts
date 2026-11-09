@@ -116,15 +116,15 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
   const fake = new FakeFetch();
   const clock = new FakeClock(Date.parse(options.startAt ?? "2026-11-09T12:00:00.000Z"));
   const secret = new FakeSecretStore();
-  const build = (): Core =>
+  const build = (override: Partial<EmbeddedConfig> = {}): Core =>
     createCore({
       db: db as never,
       fetch: fake.fetch,
       clock: clock.now,
       secret,
       sleep: async (ms) => clock.advance(ms),
-      config: { ...embeddedConfig, ...options.config },
+      config: { ...embeddedConfig, ...options.config, ...override },
       env: options.env,
     });
-  return { core: build(), /** A fresh core over the same database, as after an app restart. */ restart: build, fetch: fake, clock, secret };
+  return { core: build(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>) => build(config), fetch: fake, clock, secret };
 }

@@ -214,7 +214,7 @@ describe("Primeira leitura", () => {
     ]);
     await core.readConnection(ITEM_ID);
 
-    expect(await core.listTransactions({ accountId: BANK, month: "2026-10" })).toEqual([
+    expect(await core.listTransactions({ accountId: BANK, month: "2026-10" })).toMatchObject([
       { id: "44444444-0000-0000-0000-000000000001", description: "OUTUBRO", date: "2026-10-20", amount: -42.5 },
     ]);
     expect(await core.listTransactions({ accountId: CARD, month: "2026-10" })).toEqual([]);
