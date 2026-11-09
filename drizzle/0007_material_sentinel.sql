@@ -1,0 +1,1 @@
+ALTER TABLE `connection` ADD `estimate` text;

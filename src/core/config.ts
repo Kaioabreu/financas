@@ -46,6 +46,10 @@ export interface EmbeddedConfig {
   salaryOperationTypes: string[];
   /** Pluggy categories (normalized) that are salary by themselves. */
   salaryCategories: string[];
+  /** Banks whose bill check is validated: only these show the Lacuna note (OTA-updatable). */
+  gapBanks: string[];
+  /** A bill closes this many days before its due date (Pluggy sends no closing date per bill). */
+  billClosingDaysBeforeDue: number;
 }
 
 export const embeddedConfig: EmbeddedConfig = {
@@ -102,4 +106,6 @@ export const embeddedConfig: EmbeddedConfig = {
   salaryTransferOperationTypes: ["InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO", "TED", "DOC", "PIX"],
   salaryOperationTypes: ["FOLHA_PAGAMENTO"],
   salaryCategories: ["salary", "salario"],
+  gapBanks: ["BTG", "Mercado Pago", "Nubank"],
+  billClosingDaysBeforeDue: 7,
 };

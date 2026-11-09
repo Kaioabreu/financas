@@ -5,6 +5,7 @@
 import { eq } from "drizzle-orm";
 import { appMeta, connection } from "../db/schema";
 import type { CoreDatabase } from "./createCore";
+import type { EstimateState } from "./estimate";
 
 export interface DiagnosticEnv {
   appVersion: string;
@@ -39,6 +40,7 @@ interface ConnectionRow {
   productDates: Record<string, string>;
   facts: ItemFacts | null;
   lockPercent: number | null;
+  estimate: EstimateState | null;
   /** State in the app ("em dia", "atrasada"...) and the cause code. */
   appState: string | null;
   appCause: string | null;
@@ -49,6 +51,8 @@ interface DiagnosticData {
   facts: Facts;
   connections: ConnectionRow[];
   credentialsRefused: boolean;
+  /** Bill check counts of the cards of banks outside the validated list. Counts only. */
+  billCounts: { verified: number; matching: number; mismatching: number }[];
 }
 
 /** A section turns the allowed data into lines. Add one here to grow the text. */
@@ -72,14 +76,24 @@ const SECTIONS: Section[] = [
         `  leitura completa: ${full.join(", ") || "-"}`,
         `  estado no app: ${c.appState ?? "-"} · causa ${c.appCause ?? "-"}`,
         ...(c.lockPercent !== null ? [`  trava ${c.lockPercent}%`] : []),
+        estimateLine(c.estimate),
       ];
     }),
+  ({ billCounts }) =>
+    billCounts.map((c, i) => `Cartão ${i + 1}: faturas verificadas ${c.verified} · batem ${c.matching} · não batem ${c.mismatching}`),
   ({ facts }) => {
     const f = facts.failure;
     if (!f) return ["Última falha local: nenhuma"];
     return [`Última falha local: ${f.endpoint} (${f.status === null ? "sem resposta" : `HTTP ${f.status}`}), ${f.streak} seguidas`];
   },
 ];
+
+/** The estimate of the past: pending or closed, the attempts and the source that failed (a fixed name like "SGS 12"). */
+function estimateLine(e: EstimateState | null): string {
+  if (!e) return "  estimativa: ainda não começou";
+  const state = e.state === "pending" ? "pendente" : e.closedWithStraightLine ? "fechada com a reta" : "fechada";
+  return `  estimativa: ${state} · ${e.attempts} tentativa${e.attempts === 1 ? "" : "s"} · fonte que falhou ${orDash(e.failedSource)}`;
+}
 
 const FACTS_KEY = "diagnostic.facts";
 const EMPTY: Facts = { authStatus: null, failure: null, items: {}, locks: {} };
@@ -131,6 +145,7 @@ export function createDiagnostics(deps: {
   env: DiagnosticEnv;
   states: () => Promise<{ itemId: string; state: string; cause: string | null }[]>;
   credentialsRefused: () => Promise<boolean>;
+  billCounts: () => Promise<{ verified: number; matching: number; mismatching: number }[]>;
 }): Diagnostics {
   const { db } = deps;
   let queue: Promise<unknown> = Promise.resolve();
@@ -181,8 +196,9 @@ export function createDiagnostics(deps: {
         productDates: r.productDates ? JSON.parse(r.productDates) : {},
         facts: facts.items[r.itemId] ?? null,
         lockPercent: r.lockTriggered ? (facts.locks[r.itemId] ?? null) : null,
+        estimate: r.estimate ? (JSON.parse(r.estimate) as EstimateState) : null,
       }));
-      const data: DiagnosticData = { env: deps.env, facts, connections, credentialsRefused: await deps.credentialsRefused() };
+      const data: DiagnosticData = { env: deps.env, facts, connections, credentialsRefused: await deps.credentialsRefused(), billCounts: await deps.billCounts() };
       return ["Diagnóstico do Finanças", ...SECTIONS.flatMap((section) => section(data))].join("\n");
     },
   };

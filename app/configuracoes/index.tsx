@@ -13,6 +13,8 @@ export default function Configuracoes() {
         <SettingsRow label="Regras" onPress={() => router.push("/regras")} />
         <SectionLabel>Proteção</SectionLabel>
         <SettingsRow label="Backup" onPress={() => router.push("/configuracoes/backup")} />
+        <SectionLabel>Segurança</SectionLabel>
+        <SettingsRow label="Bloqueio" onPress={() => router.push("/configuracoes/seguranca")} />
         <SectionLabel>Aparência</SectionLabel>
         <SettingsRow label="Tema" onPress={() => router.push("/configuracoes/aparencia")} />
         <SectionLabel>Ajuda</SectionLabel>

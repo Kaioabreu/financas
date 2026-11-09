@@ -50,6 +50,13 @@
       "when": 1794260559810,
       "tag": "0006_organic_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794260793531,
+      "tag": "0007_material_sentinel",
+      "breakpoints": true
     }
   ]
 }
