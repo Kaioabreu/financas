@@ -11,6 +11,8 @@ export default function Configuracoes() {
         <SettingsRow label="Credenciais" onPress={() => router.push("/configuracoes/credenciais")} />
         <SectionLabel>Transações</SectionLabel>
         <SettingsRow label="Regras" onPress={() => router.push("/regras")} />
+        <SectionLabel>Segurança</SectionLabel>
+        <SettingsRow label="Bloqueio" onPress={() => router.push("/configuracoes/seguranca")} />
         <SectionLabel>Aparência</SectionLabel>
         <SettingsRow label="Tema" onPress={() => router.push("/configuracoes/aparencia")} />
         <SectionLabel>Ajuda</SectionLabel>

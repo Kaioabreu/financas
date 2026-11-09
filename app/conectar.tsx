@@ -25,7 +25,7 @@ export default function Conectar() {
     const started = await core.startConnect();
     if (!started.ok) return setPhase({ name: "error", error: started.error });
     // The tab promise resolves when the tab closes (abandoned, or finished and dismissed).
-    const tabClosed = WebBrowser.openBrowserAsync(started.authUrl).then(() => undefined);
+    const tabClosed = core.lock.duringExternalFlow(WebBrowser.openBrowserAsync(started.authUrl)).then(() => undefined);
     const result = await core.finishConnect(started.itemId, { tabClosed });
     if (!result.ok) return setPhase({ name: "unfinished" });
     void core.readConnection(started.itemId);

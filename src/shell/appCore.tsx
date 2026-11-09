@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import { createContext, useContext } from "react";
 import { embeddedConfig } from "../core/config";
@@ -22,6 +23,7 @@ export function createAppCore(orm: unknown): Core {
       delete: () => SecureStore.deleteItemAsync(SECRET_KEY),
     },
     config: embeddedConfig,
+    deviceHasLock: async () => (await LocalAuthentication.getEnrolledLevelAsync()) !== LocalAuthentication.SecurityLevel.NONE,
     env: { appVersion: Constants.expoConfig?.version ?? "?", otaId: Constants.manifest2?.id ?? null },
   });
   return currentCore;
