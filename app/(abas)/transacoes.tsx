@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AccountSummary, TransactionRow } from "../../src/core/connections";
+import type { AccountSummary, ConnectionSummary, TransactionRow } from "../../src/core/connections";
 import { useCore } from "../../src/shell/appCore";
 import { monthLabel, shiftMonth, useMonth } from "../../src/shell/month";
 import { Body, Fine, font, usePalette } from "../../src/shell/theme";
@@ -16,6 +16,19 @@ export default function Transacoes() {
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [rows, setRows] = useState<TransactionRow[]>([]);
+  const [connections, setConnections] = useState<ConnectionSummary[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      const report = await core.sync({ manual: true });
+      setNotice(report.notices.map((n) => n.message).join(", ") || null);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // The tab fills in as the first read advances: reload every few seconds.
   useEffect(() => {
@@ -24,6 +37,7 @@ export default function Transacoes() {
       const list = await core.listAccounts();
       if (!alive) return;
       setAccounts(list);
+      setConnections(await core.listConnections());
       const id = selected ?? list[0]?.id ?? null;
       if (id !== selected) setSelected(id);
       if (id) {
@@ -38,6 +52,10 @@ export default function Transacoes() {
       clearInterval(timer);
     };
   }, [core, month, selected]);
+
+  const itemId = accounts.find((a) => a.id === selected)?.itemId;
+  const dataAtIso = connections.find((x) => x.itemId === itemId)?.dataAt;
+  const dataAt = dataAtIso ? dataAtIso.slice(0, 10).split("-").reverse().join("/") : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>
@@ -71,7 +89,10 @@ export default function Transacoes() {
           </Pressable>
         ))}
       </ScrollView>
+      {dataAt ? <View style={{ paddingHorizontal: 24, marginTop: 8 }}><Fine>Dados de {dataAt}</Fine></View> : null}
+      {notice ? <View style={{ paddingHorizontal: 24, marginTop: 4 }}><Fine>{notice}</Fine></View> : null}
       <FlatList
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         style={{ marginTop: 12 }}
         data={rows}
         keyExtractor={(r) => r.id}

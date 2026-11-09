@@ -20,6 +20,10 @@ export interface ConnectionSummary {
   itemId: string;
   bankName: string;
   readState: ReadState;
+  /** ISO date of the oldest product data held: "Dados de <data>". Null before the first read. */
+  dataAt: string | null;
+  /** True when the last full read was held back by the 20% lock. */
+  lockTriggered: boolean;
 }
 export interface AccountSummary {
   id: string;
@@ -45,10 +49,6 @@ export interface ConnectionsApi {
    */
   finishConnect(itemId: string, options: { tabClosed: Promise<void> }): Promise<FinishConnectResult>;
   listConnections(): Promise<ConnectionSummary[]>;
-  /** First read: accounts, cards and every transaction page. Never throws; sets readState. */
-  readConnection(itemId: string): Promise<void>;
-  /** Restarts the read of Connections left in "reading" (app closed mid-read). */
-  resumeReads(): Promise<void>;
   listAccounts(): Promise<AccountSummary[]>;
   /** `month` is YYYY-MM. */
   listTransactions(query: { accountId: string; month: string }): Promise<TransactionRow[]>;
@@ -76,7 +76,6 @@ const json = (response: Response) => response.json().catch(() => null) as Promis
 
 export function createConnections(deps: Deps): ConnectionsApi {
   const { db, config } = deps;
-  const inFlight = new Set<string>();
 
   function connectError(kind: ConnectErrorKind): StartConnectResult {
     const errors: Record<ConnectErrorKind, { message: string; anchor: string }> = {
@@ -105,66 +104,6 @@ export function createConnections(deps: Deps): ConnectionsApi {
       await deps.request("DELETE", `/items/${itemId}`);
     } catch {
       // Best effort: the item can still be removed in the Dashboard.
-    }
-  }
-
-  async function setReadState(itemId: string, readState: ReadState) {
-    await db.update(connection).set({ readState }).where(eq(connection.itemId, itemId));
-  }
-
-  async function readAccounts(itemId: string) {
-    const response = await deps.request("GET", `/accounts?itemId=${itemId}`);
-    if (response.status !== 200) throw new Error(`accounts ${response.status}`);
-    const results = ((await json(response))?.results ?? []) as any[];
-    for (const a of results) {
-      const values = {
-        id: a.id as string,
-        itemId,
-        type: a.type as string,
-        subtype: a.subtype ?? null,
-        name: a.name as string,
-        number: a.number ?? null,
-        balance: a.balance ?? null,
-        currencyCode: a.currencyCode ?? null,
-        extra: JSON.stringify({ bankData: a.bankData, creditData: a.creditData, reservedBalances: a.reservedBalances }),
-      };
-      await db.insert(account).values(values).onConflictDoUpdate({ target: account.id, set: values });
-    }
-    return results.map((a) => a.id as string);
-  }
-
-  async function readTransactions(accountId: string) {
-    let path: string | null = `/v2/transactions?accountId=${accountId}`;
-    while (path) {
-      const response = await deps.request("GET", path);
-      if (response.status !== 200) throw new Error(`transactions ${response.status}`);
-      const body = await json(response);
-      for (const t of (body?.results ?? []) as any[]) {
-        const values = {
-          id: t.id as string,
-          accountId: (t.accountId ?? accountId) as string,
-          date: t.date as string,
-          description: t.description as string,
-          descriptionRaw: t.descriptionRaw ?? null,
-          amount: t.amount as number,
-          amountInAccountCurrency: t.amountInAccountCurrency ?? null,
-          currencyCode: t.currencyCode ?? null,
-          balance: t.balance ?? null,
-          category: t.category ?? null,
-          categoryId: t.categoryId ?? null,
-          status: t.status ?? null,
-          type: t.type ?? null,
-          operationType: t.operationType ?? null,
-          extra: JSON.stringify({
-            creditCardMetadata: t.creditCardMetadata,
-            paymentData: t.paymentData,
-            merchant: t.merchant,
-          }),
-        };
-        await db.insert(bankTransaction).values(values).onConflictDoUpdate({ target: bankTransaction.id, set: values });
-      }
-      // `next` is a ready query string to paste after the path; null on the last page.
-      path = body?.next ? `/v2/transactions${body.next}` : null;
     }
   }
 
@@ -237,28 +176,7 @@ export function createConnections(deps: Deps): ConnectionsApi {
 
     async listConnections() {
       const rows = await db.select().from(connection);
-      return rows.map((r) => ({ itemId: r.itemId, bankName: r.bankName, readState: r.readState as ReadState }));
-    },
-
-    async readConnection(itemId) {
-      if (inFlight.has(itemId)) return;
-      inFlight.add(itemId);
-      try {
-        await setReadState(itemId, "reading");
-        const accountIds = await readAccounts(itemId);
-        for (const id of accountIds) await readTransactions(id);
-        await setReadState(itemId, "done");
-      } catch {
-        // Whatever was written stays: an incomplete read never deletes anything.
-        await setReadState(itemId, "failed");
-      } finally {
-        inFlight.delete(itemId);
-      }
-    },
-
-    async resumeReads() {
-      const rows = await db.select().from(connection).where(eq(connection.readState, "reading"));
-      await Promise.all(rows.map((r) => this.readConnection(r.itemId)));
+      return rows.map((r) => ({ itemId: r.itemId, bankName: r.bankName, readState: r.readState as ReadState, dataAt: r.dataAt, lockTriggered: r.lockTriggered }));
     },
 
     async listAccounts() {

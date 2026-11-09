@@ -11,6 +11,7 @@ import * as schema from "../db/schema";
 export interface FakeResponse {
   status?: number;
   body?: unknown;
+  headers?: Record<string, string>;
 }
 export interface RecordedCall {
   method: string;
@@ -57,8 +58,8 @@ export class FakeFetch {
   };
 }
 
-function jsonResponse({ status = 200, body = {} }: FakeResponse): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+function jsonResponse({ status = 200, body = {}, headers = {} }: FakeResponse): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 }
 
 export class FakeClock {

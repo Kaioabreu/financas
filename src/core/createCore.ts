@@ -5,6 +5,7 @@ import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import type { EmbeddedConfig } from "./config";
 import { appMeta } from "../db/schema";
 import { createConnections, type ConnectionsApi } from "./connections";
+import { createSync, type SyncApi } from "./sync";
 
 /** Works with both the sync (expo-sqlite) and async drivers: every query is awaited. */
 export type CoreDatabase = BaseSQLiteDatabase<"sync" | "async", unknown, Record<string, unknown>>;
@@ -43,7 +44,7 @@ export interface CredentialsError {
 export type SaveCredentialsResult = { ok: true } | { ok: false; error: CredentialsError };
 export type CredentialsStatus = { saved: false } | { saved: true; clientId: string };
 
-export interface Core extends ConnectionsApi {
+export interface Core extends ConnectionsApi, SyncApi {
   credentialsStatus(): Promise<CredentialsStatus>;
   /** Checks the credentials with Pluggy (POST /auth) and saves them only on a 200. */
   saveCredentials(input: Credentials): Promise<SaveCredentialsResult>;
@@ -123,8 +124,16 @@ export function createCore(deps: CoreDeps): Core {
     request,
   });
 
+  const sync = createSync({
+    db,
+    config,
+    sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+    request,
+  });
+
   return {
     ...connections,
+    ...sync,
     async credentialsStatus() {
       const clientId = await readMeta(CLIENT_ID_KEY);
       const secret = await deps.secret.get();
