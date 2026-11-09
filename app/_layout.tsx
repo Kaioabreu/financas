@@ -1,7 +1,7 @@
 import { Jost_400Regular, Jost_500Medium, Jost_600SemiBold, useFonts } from "@expo-google-fonts/jost";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Appearance, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { Core } from "../src/core/createCore";
 import { CoreProvider, createAppCore } from "../src/shell/appCore";
@@ -23,7 +23,12 @@ export default function RootLayout() {
 
   useEffect(() => {
     openAppVault().then(
-      (vault) => setState({ status: "open", core: createAppCore(vault.orm) }),
+      async (vault) => {
+        const core = createAppCore(vault.orm);
+        const saved = await core.appearance().catch(() => "system" as const);
+        Appearance.setColorScheme(saved === "system" ? "unspecified" : saved);
+        setState({ status: "open", core });
+      },
       (error: unknown) =>
         setState({ status: "failed", message: error instanceof Error ? error.message : String(error) }),
     );
