@@ -17,8 +17,16 @@ O Client ID e o Client Secret da aplicação do usuário. Quem tem o Client Secr
 _Avoid_: chaves, token, senha
 
 **Conexão**:
-A autorização que o usuário dá no Meu Pluggy para o app ler os dados de um banco dele. Vence em 1 ano; renová-la exige um novo login do usuário e não muda os dados já lidos.
+A autorização que o usuário dá no Meu Pluggy para o app ler os dados de um banco dele. Vence em 1 ano; renová-la exige um novo login do usuário e não muda os dados já lidos. Não é a ligação do banco com o Meu Pluggy, que o usuário cuida no app do Meu Pluggy.
 _Avoid_: item, vínculo
+
+**Conexão atrasada**:
+Conexão cujos dados não se renovam há mais de dois dias, por qualquer causa. Continua sincronizando e mantém os dados.
+_Avoid_: com erro, desatualizada
+
+**Conexão a reconectar**:
+Conexão que só volta com um novo login do usuário no Meu Pluggy, como a vencida ou a revogada. Para de sincronizar e mantém os dados.
+_Avoid_: com erro, desatualizada
 
 **Backup**:
 Arquivo cifrado que o usuário gera à mão com os dados do app e que só abre com a senha que ele escolheu. É o único jeito de os dados sobreviverem à perda do celular.
