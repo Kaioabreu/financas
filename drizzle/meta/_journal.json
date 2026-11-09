@@ -15,6 +15,13 @@
       "when": 1794257274958,
       "tag": "0001_plain_shen",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794258237896,
+      "tag": "0002_mean_lockjaw",
+      "breakpoints": true
     }
   ]
 }

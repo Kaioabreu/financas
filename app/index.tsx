@@ -20,7 +20,7 @@ export default function Entry() {
 
   useEffect(() => {
     if (!saved) return;
-    void core.resumeReads();
+    void core.resumeReads().then(() => core.sync({ manual: false }));
     const load = () => core.listConnections().then(setConnections);
     void load();
     const timer = setInterval(load, 2000);

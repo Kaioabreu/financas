@@ -14,6 +14,16 @@ export const connection = sqliteTable("connection", {
   consentExpiresAt: text("consent_expires_at"),
   /** "reading" | "done" | "failed" */
   readState: text("read_state").notNull(),
+  /** Pluggy's `lastUpdatedAt` of the last read that finished writing. */
+  lastReadAt: text("last_read_at"),
+  /** False when the last attempt did not complete (local failure or the 20% lock). */
+  attemptComplete: integer("attempt_complete", { mode: "boolean" }).notNull().default(true),
+  /** True when the last full read was held back by the 20% lock. */
+  lockTriggered: integer("lock_triggered", { mode: "boolean" }).notNull().default(false),
+  /** JSON {product: ISO date}: the date of the data the app holds for each product. */
+  productDates: text("product_dates"),
+  /** The oldest of the product dates: "Dados de <data>". */
+  dataAt: text("data_at"),
 });
 
 /** Bank accounts and credit cards, as Pluggy sent them (Pluggy ids). */
@@ -47,5 +57,54 @@ export const bankTransaction = sqliteTable("bank_transaction", {
   type: text("type"),
   operationType: text("operation_type"),
   /** JSON: creditCardMetadata, paymentData, merchant. */
+  extra: text("extra"),
+});
+
+/** Credit card bills (Faturas), as Pluggy sent them. */
+export const bill = sqliteTable("bill", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  dueDate: text("due_date").notNull(),
+  totalAmount: real("total_amount"),
+  currencyCode: text("currency_code"),
+  minimumPaymentAmount: real("minimum_payment_amount"),
+  /** JSON: allowsInstallments, financeCharges, payments. */
+  extra: text("extra"),
+});
+
+export const investment = sqliteTable("investment", {
+  id: text("id").primaryKey(),
+  itemId: text("item_id").notNull(),
+  type: text("type"),
+  subtype: text("subtype"),
+  name: text("name").notNull(),
+  balance: real("balance"),
+  amount: real("amount"),
+  amountOriginal: real("amount_original"),
+  date: text("date"),
+  currencyCode: text("currency_code"),
+  status: text("status"),
+  /** JSON: the rest of what Pluggy sent. */
+  extra: text("extra"),
+});
+
+export const investmentTransaction = sqliteTable("investment_transaction", {
+  id: text("id").primaryKey(),
+  investmentId: text("investment_id").notNull(),
+  type: text("type"),
+  date: text("date").notNull(),
+  description: text("description"),
+  quantity: real("quantity"),
+  value: real("value"),
+  amount: real("amount"),
+  extra: text("extra"),
+});
+
+/** The holder's identity, as the item's /identity returned it. */
+export const identity = sqliteTable("identity", {
+  itemId: text("item_id").primaryKey(),
+  fullName: text("full_name"),
+  document: text("document"),
+  documentType: text("document_type"),
   extra: text("extra"),
 });

@@ -137,6 +137,9 @@ describe("Primeira leitura", () => {
     itemSequence(world.fetch, item({ status: "UPDATED" }));
     await world.core.finishConnect(ITEM_ID, { tabClosed: NEVER });
     world.fetch.on("GET", `${API}/accounts`, { body: page([account(), creditCard()]) });
+    world.fetch.on("GET", `${API}/bills`, { body: page([]) });
+    world.fetch.on("GET", `${API}/investments`, { body: page([]) });
+    world.fetch.on("GET", `${API}/identity`, { body: page([]) });
     return world;
   }
   const txRoute = (fetch: FakeFetch, accountId: string, pages: object[][]) =>
@@ -225,7 +228,7 @@ describe("Primeira leitura", () => {
     expect(await core.listTransactions({ accountId: BANK, month: "2026-10" })).toHaveLength(1);
   });
 
-  it("uma leitura que falha no meio mantém o que já veio e marca a falha", async () => {
+  it("uma leitura que falha no meio não grava nada e marca a falha", async () => {
     const { core, fetch } = await connected();
     let calls = 0;
     fetch.on("GET", `${API}/v2/transactions`, (call) => {
@@ -237,7 +240,7 @@ describe("Primeira leitura", () => {
 
     await core.readConnection(ITEM_ID);
 
-    expect(await core.listTransactions({ accountId: BANK, month: "2026-10" })).toHaveLength(1);
+    expect(await core.listTransactions({ accountId: BANK, month: "2026-10" })).toHaveLength(0);
     expect(await core.listConnections()).toMatchObject([{ readState: "failed" }]);
   });
 });
