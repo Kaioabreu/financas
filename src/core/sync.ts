@@ -45,6 +45,8 @@ interface Deps {
   config: EmbeddedConfig;
   sleep: (ms: number) => Promise<void>;
   request: (method: string, path: string, body?: unknown) => Promise<Response>;
+  /** The lock held back a read: the biggest share of a product it would have deleted (0-100). */
+  onLock?: (itemId: string, percent: number) => Promise<void>;
 }
 
 type Product = "accounts" | "creditCards" | "transactions" | "investments" | "investmentsTransactions" | "identity";
@@ -265,6 +267,11 @@ export function createSync(deps: Deps): SyncApi {
     const dates = { ...previous };
     for (const product of PRODUCTS) if (updated(product)) dates[product] = dateOf(product) ?? previous[product] ?? "";
     const known = Object.values(dates).filter(Boolean).sort();
+
+    if (locked) {
+      const worst = Math.max(...plans.filter((p) => p.inPeriod > 0).map((p) => p.stale.length / p.inPeriod));
+      await deps.onLock?.(itemId, Math.round(worst * 100));
+    }
 
     await inTransaction(async () => {
       for (const a of fetchedAccounts) {

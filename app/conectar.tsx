@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ActivityIndicator, Linking, Text, View } from "react-native";
 import { embeddedConfig } from "../src/core/config";
 import type { ConnectError } from "../src/core/connections";
+import { CopyDiagnostic } from "../src/shell/CopyDiagnostic";
 import { useCore } from "../src/shell/appCore";
 import { Body, Button, font, LinkText, Screen, usePalette } from "../src/shell/theme";
 
@@ -70,6 +71,7 @@ export default function Conectar() {
         <Text style={{ fontFamily: font.medium, color: c.neg, fontSize: 15 }}>{error.message}</Text>
         <View style={{ marginTop: 12 }}>
           <LinkText onPress={() => Linking.openURL(error.helpUrl)}>Ver em Problemas comuns</LinkText>
+          <CopyDiagnostic />
         </View>
       </Screen>
     );
@@ -87,6 +89,9 @@ export default function Conectar() {
       }
     >
       <LinkText onPress={() => Linking.openURL(`${embeddedConfig.guideUrl}#login-que-nao-terminou`)}>Problemas comuns</LinkText>
+      <View style={{ marginTop: 12 }}>
+        <CopyDiagnostic />
+      </View>
     </Screen>
   );
 }

@@ -6,6 +6,7 @@ import type { EmbeddedConfig } from "./config";
 import { appMeta } from "../db/schema";
 import { createConnections, type ConnectionsApi } from "./connections";
 import { createSync, type SyncApi } from "./sync";
+import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
 
 /** Works with both the sync (expo-sqlite) and async drivers: every query is awaited. */
 export type CoreDatabase = BaseSQLiteDatabase<"sync" | "async", unknown, Record<string, unknown>>;
@@ -25,6 +26,8 @@ export interface CoreDeps {
   config: EmbeddedConfig;
   /** Waits between polls; tests replace it to move the fake clock. */
   sleep?: (ms: number) => Promise<void>;
+  /** App and OTA update versions, for the diagnostic. */
+  env?: DiagnosticEnv;
 }
 
 export interface Credentials {
@@ -45,6 +48,8 @@ export type SaveCredentialsResult = { ok: true } | { ok: false; error: Credentia
 export type CredentialsStatus = { saved: false } | { saved: true; clientId: string };
 
 export interface Core extends ConnectionsApi, SyncApi {
+  /** The "Copiar diagnóstico" text: only allow-listed facts, never amounts, names or ids. */
+  diagnostic(): Promise<string>;
   credentialsStatus(): Promise<CredentialsStatus>;
   /** Checks the credentials with Pluggy (POST /auth) and saves them only on a 200. */
   saveCredentials(input: Credentials): Promise<SaveCredentialsResult>;
@@ -57,6 +62,7 @@ const CLIENT_ID_KEY = "pluggy.clientId";
 export function createCore(deps: CoreDeps): Core {
   const { db, config } = deps;
   let apiKey: { value: string; expiresAt: number } | null = null;
+  const diagnostics = createDiagnostics({ db, env: deps.env ?? { appVersion: "?", otaId: null } });
 
   async function readMeta(key: string): Promise<string | null> {
     const rows = await db.select().from(appMeta).where(eq(appMeta.key, key));
@@ -92,8 +98,10 @@ export function createCore(deps: CoreDeps): Core {
         body: JSON.stringify(credentials),
       });
     } catch {
+      await diagnostics.observeAuth(null);
       return "offline";
     }
+    await diagnostics.observeAuth(response.status);
     if (response.status === 401 || response.status === 403) return "refused";
     if (response.status !== 200) return "unexpected";
     const json = (await response.json().catch(() => null)) as { apiKey?: string } | null;
@@ -109,11 +117,19 @@ export function createCore(deps: CoreDeps): Core {
       if (typeof result === "string") throw new Error(`Pluggy authentication failed (${result}).`);
       apiKey = { value: result.apiKey, expiresAt: deps.clock() + config.apiKeyTtlMs };
     }
-    return deps.fetch(`${config.pluggyBaseUrl}${path}`, {
-      method,
-      headers: { "X-API-KEY": apiKey.value, "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+      response = await deps.fetch(`${config.pluggyBaseUrl}${path}`, {
+        method,
+        headers: { "X-API-KEY": apiKey.value, "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch (error) {
+      await diagnostics.observe(method, path, { error: true });
+      throw error;
+    }
+    await diagnostics.observe(method, path, { status: response.status, body: () => response.clone().json() });
+    return response;
   };
 
   const connections = createConnections({
@@ -129,11 +145,13 @@ export function createCore(deps: CoreDeps): Core {
     config,
     sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     request,
+    onLock: diagnostics.recordLock,
   });
 
   return {
     ...connections,
     ...sync,
+    diagnostic: () => diagnostics.build(),
     async credentialsStatus() {
       const clientId = await readMeta(CLIENT_ID_KEY);
       const secret = await deps.secret.get();

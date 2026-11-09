@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Linking, Text, TextInput, View } from "react-native";
 import { embeddedConfig } from "../src/core/config";
 import type { CredentialsError } from "../src/core/createCore";
+import { CopyDiagnostic } from "../src/shell/CopyDiagnostic";
 import { useCore } from "../src/shell/appCore";
 import { Button, Fine, font, LinkText, Screen, usePalette } from "../src/shell/theme";
 
@@ -72,6 +73,7 @@ export default function Credenciais() {
         <View style={{ marginTop: 20, gap: 6 }}>
           <Text style={{ fontFamily: font.medium, color: c.neg, fontSize: 15 }}>{error.message}</Text>
           <LinkText onPress={() => Linking.openURL(error.helpUrl)}>Ver em Problemas comuns</LinkText>
+          <CopyDiagnostic />
         </View>
       ) : null}
     </Screen>

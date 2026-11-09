@@ -7,6 +7,12 @@ import type { Core } from "../src/core/createCore";
 import { CoreProvider, createAppCore } from "../src/shell/appCore";
 import { openAppVault } from "../src/shell/openDatabase";
 import { usePalette } from "../src/shell/theme";
+import { ErrorScreen } from "../src/shell/ErrorScreen";
+
+/** expo-router renders this for any unhandled error below the layout. */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  return <ErrorScreen error={error} retry={retry} />;
+}
 
 type State = { status: "opening" } | { status: "open"; core: Core } | { status: "failed"; message: string };
 
