@@ -48,8 +48,15 @@ O assunto de um gasto (Mercado, Transporte…), escolhido de uma lista fixa do a
 **Fatura**:
 O conjunto de compras de um cartão cobradas num mesmo vencimento. Ela não decide em que mês um gasto conta: a compra conta no mês em que foi feita.
 
+**Compra parcelada**:
+Compra no cartão paga em parcelas. Tem uma natureza e uma categoria só, que valem para todas as suas parcelas.
+
 **Parcela**:
-Cada pagamento de uma compra parcelada. Cada parcela é um gasto no mês em que cai.
+Cada pagamento de uma compra parcelada. A parcela k é um gasto no mesmo dia da compra, k − 1 meses depois (no último dia do mês, se ele for mais curto), a não ser que tenha sido adiantada.
+
+**Parcela adiantada**:
+Parcela que o usuário pagou antes do seu mês, na fatura atual, em troca de um desconto. É um gasto no dia do adiantamento, e o desconto é um reembolso dela.
+_Avoid_: parcela antecipada
 
 **Regra**:
 Instrução do usuário que dá uma natureza e/ou uma categoria às transações cuja descrição contém um texto. Vale para as transações passadas e futuras, menos as editadas à mão.
@@ -117,7 +124,7 @@ Os investimentos, cofrinhos e caixinhas do usuário, isto é, o patrimônio sem 
 _Avoid_: portfólio, investimentos (no sentido do conjunto)
 
 **Dívida**:
-O que o patrimônio desconta: as compras de cartão já lançadas e ainda não pagas e o cheque especial usado. Uma parcela só vira dívida no mês em que cai.
+O que o patrimônio desconta: as compras de cartão já lançadas e ainda não pagas e o cheque especial usado. Uma parcela só vira dívida no dia em que conta como gasto.
 
 **Valor de resgate**:
 Quanto o usuário receberia ao resgatar um investimento hoje, já descontados o imposto e o IOF. É o valor que o patrimônio usa.
