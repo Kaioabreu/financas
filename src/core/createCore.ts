@@ -148,6 +148,7 @@ export function createCore(deps: CoreDeps): Core {
   const sync = createSync({
     db,
     config,
+    clock: deps.clock,
     sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     request,
     onLock: diagnostics.recordLock,

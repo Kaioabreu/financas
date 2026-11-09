@@ -38,7 +38,9 @@ async function world(options: { identity?: object[]; config?: Partial<EmbeddedCo
   w.fetch.on("POST", `${API}/auth`, { body: authResponse() });
   await w.core.saveCredentials({ clientId: SYNTHETIC_CLIENT_ID, clientSecret: SYNTHETIC_CLIENT_SECRET });
   w.fetch.on("GET", `${API}/items/${ITEM_ID}`, () => ({ body: item() }));
-  w.fetch.on("GET", `${API}/accounts`, { body: page([account(), creditCard()]) });
+  w.fetch.on("GET", `${API}/accounts`, (call) => ({
+    body: page(call.url.includes(OTHER_ITEM) ? [account({ id: "22222222-0000-0000-0000-0000000000aa", itemId: OTHER_ITEM })] : [account(), creditCard()]),
+  }));
   w.fetch.on("GET", `${API}/v2/transactions`, (call) => ({
     body: { results: call.url.includes(`accountId=${CARD}`) ? state.card : state.bank, next: null },
   }));
