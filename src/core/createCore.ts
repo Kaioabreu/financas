@@ -13,7 +13,7 @@ import { createSummary, type SummaryApi } from "./summary";
 import { createBills, type BillsApi } from "./bills";
 import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
 import { createLock, type LockApi } from "./lock";
-import { buildNotices, readSnoozes, REFUSED_KEY, snoozeKey, SNOOZE_MS, type NoticeQueue } from "./status";
+import { backupNotice, buildNotices, readSnoozes, REFUSED_KEY, snoozeKey, SNOOZE_MS, type NoticeQueue } from "./status";
 
 /** Works with both the sync (expo-sqlite) and async drivers: every query is awaited. */
 export type CoreDatabase = BaseSQLiteDatabase<"sync" | "async", unknown, Record<string, unknown>>;
@@ -37,6 +37,16 @@ export interface CoreDeps {
   env?: DiagnosticEnv;
   /** Whether the phone has a screen lock (biometric or PIN) to unlock the app with. */
   deviceHasLock?: () => Promise<boolean>;
+  /** Salted one-way hash of the Backup password, for the verifier (the shell uses expo-crypto). */
+  passwordHash: (password: string, salt: string) => Promise<string>;
+  /** `n` random bytes as hex, for the verifier's salt. */
+  randomHex: (n: number) => string;
+}
+
+export type BackupPasswordResult = { ok: true } | { ok: false; reason: "too-short" | "mismatch" };
+export interface BackupStatus {
+  passwordSet: boolean;
+  lastBackupAt: string | null;
 }
 
 export interface Credentials {
@@ -75,6 +85,13 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
    * The rules and the hand edits stay.
    */
   switchApplication(): Promise<void>;
+  backupStatus(): Promise<BackupStatus>;
+  /** Sets (or replaces, "Criar nova senha") the Backup password verifier: 8+ characters, typed twice. */
+  createBackupPassword(password: string, confirmation: string): Promise<BackupPasswordResult>;
+  /** Checks a typed password against the stored verifier. The password itself is never stored. */
+  verifyBackupPassword(password: string): Promise<boolean>;
+  /** Marks a Backup as just made ("Último backup"). */
+  recordBackup(): Promise<void>;
   /** Bloqueio por biometria: when to prompt, and the Segurança switch. */
   lock: LockApi;
   /** Do sistema (the default), Claro or Escuro. */
@@ -88,6 +105,9 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
 
 const CLIENT_ID_KEY = "pluggy.clientId";
 const APPEARANCE_KEY = "appearance";
+const BACKUP_VERIFIER_KEY = "backup.verifier";
+const LAST_BACKUP_KEY = "backup.lastAt";
+export const BACKUP_MIN_PASSWORD = 8;
 const LOCK_KEY = "lock.enabled";
 
 export function createCore(deps: CoreDeps): Core {
@@ -254,7 +274,32 @@ export function createCore(deps: CoreDeps): Core {
     async notices() {
       const sources = await connections.listConnections();
       const snoozes = await readSnoozes(db);
-      return buildNotices(await credentialsRefused(), sources, (key) => snoozes.get(key) ?? 0, deps.clock());
+      const synced = sources.some((s) => s.lastReadAt !== null);
+      const backup = backupNotice(await readMeta(LAST_BACKUP_KEY), synced, deps.clock());
+      return buildNotices(await credentialsRefused(), sources, (key) => snoozes.get(key) ?? 0, deps.clock(), backup);
+    },
+
+    async backupStatus() {
+      return { passwordSet: (await readMeta(BACKUP_VERIFIER_KEY)) !== null, lastBackupAt: await readMeta(LAST_BACKUP_KEY) };
+    },
+
+    async createBackupPassword(password, confirmation) {
+      if (password.length < BACKUP_MIN_PASSWORD) return { ok: false, reason: "too-short" };
+      if (password !== confirmation) return { ok: false, reason: "mismatch" };
+      const salt = deps.randomHex(16);
+      await writeMeta(BACKUP_VERIFIER_KEY, `${salt}:${await deps.passwordHash(password, salt)}`);
+      return { ok: true };
+    },
+
+    async verifyBackupPassword(password) {
+      const stored = await readMeta(BACKUP_VERIFIER_KEY);
+      if (!stored) return false;
+      const [salt, hash] = stored.split(":");
+      return (await deps.passwordHash(password, salt!)) === hash;
+    },
+
+    async recordBackup() {
+      await writeMeta(LAST_BACKUP_KEY, new Date(deps.clock()).toISOString());
     },
 
     async snoozeNotice(key) {

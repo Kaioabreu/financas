@@ -70,7 +70,7 @@ export default function Resumo() {
         onAction={() => {
           const n = queue.shown;
           if (!n) return;
-          router.push(n.action === "update-secret" ? "/atualizar-secret" : n.action === "open-connections" ? "/conexoes" : "/conectar");
+          router.push(n.action === "backup" ? "/configuracoes/backup" : n.action === "update-secret" ? "/atualizar-secret" : n.action === "open-connections" ? "/conexoes" : "/conectar");
         }}
         onSnooze={async () => {
           if (!queue.shown) return;

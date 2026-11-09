@@ -212,12 +212,14 @@ describe("Credenciais recusadas", () => {
 describe("Aviso do Resumo", () => {
   it("sem nada a avisar, não há aviso", async () => {
     const w = await world();
+    await w.core.recordBackup();
     expect(await w.core.notices()).toEqual({ shown: null, more: 0 });
   });
 
   it("a reconectar mostra o texto e a ação", async () => {
     const w = await world();
     w.clock.advance(70 * DAY); // vencida
+    await w.core.recordBackup();
     const queue = await w.core.notices();
     expect(queue.shown).toMatchObject({ kind: "reconnect", text: "A conexão com o BTG precisa de um novo login · Reconectar" });
     expect(queue.more).toBe(0);
@@ -225,6 +227,7 @@ describe("Aviso do Resumo", () => {
 
   it("credenciais recusadas vêm antes de tudo, e 'e mais N' conta os outros", async () => {
     const w = await world();
+    await w.core.recordBackup();
     w.setItem({ status: "LOGIN_ERROR" });
     await w.core.sync({ manual: true });
     w.clock.advance(3 * HOUR);
@@ -257,12 +260,15 @@ describe("Aviso do Resumo", () => {
   it("'Agora não' adia por 30 dias, e o aviso volta depois", async () => {
     const w = await world();
     w.clock.advance(70 * DAY);
+    await w.core.snoozeNotice("backup");
     const { shown } = await w.core.notices();
     await w.core.snoozeNotice(shown!.key);
     expect(await w.core.notices()).toEqual({ shown: null, more: 0 });
     w.clock.advance(29 * DAY);
+    await w.core.recordBackup();
     expect((await w.core.notices()).shown).toBeNull();
     w.clock.advance(2 * DAY);
+    await w.core.recordBackup();
     expect((await w.core.notices()).shown!.kind).toBe("reconnect");
   });
 
