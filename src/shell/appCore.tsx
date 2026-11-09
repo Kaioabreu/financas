@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import { createContext, useContext } from "react";
 import { embeddedConfig } from "../core/config";
@@ -7,8 +8,11 @@ type Orm = Parameters<typeof createCore>[0]["db"];
 
 const SECRET_KEY = "pluggy-client-secret";
 
+/** The running core, for the error screen (which renders outside the provider). */
+export let currentCore: Core | null = null;
+
 export function createAppCore(orm: unknown): Core {
-  return createCore({
+  currentCore = createCore({
     db: orm as Orm,
     fetch: globalThis.fetch,
     clock: () => Date.now(),
@@ -18,7 +22,9 @@ export function createAppCore(orm: unknown): Core {
       delete: () => SecureStore.deleteItemAsync(SECRET_KEY),
     },
     config: embeddedConfig,
+    env: { appVersion: Constants.expoConfig?.version ?? "?", otaId: Constants.manifest2?.id ?? null },
   });
+  return currentCore;
 }
 
 const CoreContext = createContext<Core | null>(null);
