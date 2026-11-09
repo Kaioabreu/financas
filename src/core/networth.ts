@@ -28,6 +28,8 @@ export interface CurvePoint {
   date: string;
   total: number;
   today: boolean;
+  /** Part of this point comes from an estimated Retrato (shown in gray). */
+  estimated: boolean;
 }
 export interface NetWorthBank {
   itemId: string;
@@ -46,6 +48,8 @@ export interface NetWorthView {
   debt: number;
   curve: CurvePoint[];
   banks: NetWorthBank[];
+  /** Banks whose estimate of the past is pending: "Estimando o histórico do BTG…". */
+  estimating: string[];
 }
 
 export interface NetWorthApi {
@@ -146,7 +150,7 @@ export function createNetWorth(deps: Deps) {
     return (await db.select().from(snapshot)).map((r) => ({
       date: r.date,
       itemId: r.itemId,
-      ...(parse(r.payload) as { lines?: Line[]; unavailable?: boolean }),
+      ...(parse(r.payload) as { lines?: Line[]; unavailable?: boolean; estimated?: boolean }),
     }));
   }
 
@@ -168,6 +172,7 @@ export function createNetWorth(deps: Deps) {
       const byClass = new Map<AssetClass, number>();
       let debt = 0;
       const banks: NetWorthBank[] = [];
+      const estimating = conns.filter((c) => c.estimate && JSON.parse(c.estimate).state === "pending").map((c) => c.bankName);
       for (const c of conns) {
         const last = await db
           .select()
@@ -208,15 +213,19 @@ export function createNetWorth(deps: Deps) {
       // The curve: the last Retrato of each month before this one, then today.
       const thisMonth = today.slice(0, 7);
       const totalAt = (date: string) => {
-        const latest = new Map<string, { date: string; lines: Line[] }>();
+        const latest = new Map<string, { date: string; lines: Line[]; estimated: boolean }>();
         for (const s of snaps) {
           if (s.date > date) continue;
           const cur = latest.get(s.itemId);
-          if (!cur || s.date > cur.date) latest.set(s.itemId, { date: s.date, lines: s.lines ?? [] });
+          if (!cur || s.date > cur.date) latest.set(s.itemId, { date: s.date, lines: s.lines ?? [], estimated: s.estimated === true });
         }
         let sum = 0;
-        for (const { lines } of latest.values()) for (const l of lines) sum += l.value;
-        return round(sum);
+        let estimated = false;
+        for (const v of latest.values()) {
+          estimated ||= v.estimated;
+          for (const l of v.lines) sum += l.value;
+        }
+        return { total: round(sum), estimated };
       };
       const lastDayOfMonth = new Map<string, string>();
       for (const s of snaps) {
@@ -226,11 +235,11 @@ export function createNetWorth(deps: Deps) {
       }
       const curve: CurvePoint[] = [...lastDayOfMonth]
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, date]) => ({ month, date, total: totalAt(date), today: false }));
+        .map(([month, date]) => ({ month, date, ...totalAt(date), today: false }));
       const previous = curve[curve.length - 1];
-      curve.push({ month: thisMonth, date: today, total, today: true });
+      curve.push({ month: thisMonth, date: today, total, today: true, estimated: false });
 
-      return { total, variation: previous ? round(total - previous.total) : null, classes, debt: round(debt), curve, banks };
+      return { total, variation: previous ? round(total - previous.total) : null, classes, debt: round(debt), curve, banks, estimating };
     },
   };
 }

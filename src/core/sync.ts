@@ -53,6 +53,8 @@ interface Deps {
   moveEdits?: (newIds: string[]) => Promise<void>;
   /** Writes the Retrato of the Connection for today; `unavailable` when Pluggy flagged a resource. */
   takeSnapshot?: (itemId: string, unavailable: boolean) => Promise<void>;
+  /** Runs or retries the estimate of the 12 months before the first read; never throws. */
+  estimate?: (itemId: string) => Promise<void>;
 }
 
 type Product = "accounts" | "creditCards" | "transactions" | "investments" | "investmentsTransactions" | "identity";
@@ -446,9 +448,13 @@ export function createSync(deps: Deps): SyncApi {
     inFlight.add(itemId);
     try {
       await mirrorRead(itemId, force);
+      await deps.estimate?.(itemId);
       return false;
     } catch (error) {
-      if (error instanceof SkipRead) return false;
+      if (error instanceof SkipRead) {
+        await deps.estimate?.(itemId); // a pending estimate is retried on every sync
+        return false;
+      }
       // Nothing was written. A first read that fails is "failed"; later ones just stay incomplete.
       const [conn] = await db.select().from(connection).where(eq(connection.itemId, itemId));
       await setConnection(itemId, conn?.lastReadAt ? { attemptComplete: false } : { readState: "failed", attemptComplete: false });

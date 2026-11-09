@@ -24,6 +24,8 @@ export const connection = sqliteTable("connection", {
   productDates: text("product_dates"),
   /** The oldest of the product dates: "Dados de <data>". */
   dataAt: text("data_at"),
+  /** JSON: the state of the estimate of the 12 months before the first read (see core/estimate.ts). */
+  estimate: text("estimate"),
 });
 
 /** Bank accounts and credit cards, as Pluggy sent them (Pluggy ids). */
