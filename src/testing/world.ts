@@ -121,6 +121,7 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
       fetch: fake.fetch,
       clock: clock.now,
       secret,
+      sleep: async (ms) => clock.advance(ms),
       config: { ...embeddedConfig, ...options.config },
     });
   return { core: build(), /** A fresh core over the same database, as after an app restart. */ restart: build, fetch: fake, clock, secret };
