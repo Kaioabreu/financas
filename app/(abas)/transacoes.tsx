@@ -24,8 +24,7 @@ export default function Transacoes() {
     setRefreshing(true);
     try {
       const report = await core.sync({ manual: true });
-      setNotice(report.notices.map((n) => n.message).join("
-") || null);
+      setNotice(report.notices.map((n) => n.message).join(", ") || null);
     } finally {
       setRefreshing(false);
     }
