@@ -60,8 +60,16 @@ export interface ConnectionsApi {
   finishConnect(itemId: string, options: { tabClosed: Promise<void> }): Promise<FinishConnectResult>;
   listConnections(): Promise<ConnectionSummary[]>;
   listAccounts(): Promise<AccountSummary[]>;
-  /** `month` is YYYY-MM. */
-  listTransactions(query: { accountId: string; month: string }): Promise<TransactionRow[]>;
+  /**
+   * `month` is YYYY-MM. Without `accountId`, every account. With `category` or `days` (days of
+   * the month), only the gastos and reembolsos that the Gastos tab summed for that slice.
+   */
+  listTransactions(query: {
+    accountId?: string;
+    month: string;
+    category?: Classification["category"];
+    days?: { from: number; to: number };
+  }): Promise<TransactionRow[]>;
 }
 
 interface Deps {
@@ -200,23 +208,33 @@ export function createConnections(deps: Deps): ConnectionsApi {
       }));
     },
 
-    async listTransactions({ accountId, month }) {
+    async listTransactions({ accountId, month, category, days }) {
+      const monthRows = like(bankTransaction.date, `${month}-%`);
       const rows = await db
         .select()
         .from(bankTransaction)
-        .where(and(eq(bankTransaction.accountId, accountId), like(bankTransaction.date, `${month}-%`)))
+        .where(accountId ? and(eq(bankTransaction.accountId, accountId), monthRows) : monthRows)
         .orderBy(desc(bankTransaction.date));
       const classes = await deps.classify(rows.map((r) => r.id));
-      const [owner] = await db.select().from(account).where(eq(account.id, accountId));
-      return rows.map((r) => ({
-        id: r.id,
-        description: r.description,
-        date: r.date.slice(0, 10),
-        amount: r.amountInAccountCurrency ?? r.amount,
-        accountId,
-        accountName: owner?.name ?? "",
-        ...classes.get(r.id)!,
-      }));
+      const owners = new Map((await db.select().from(account)).map((a) => [a.id, a.name]));
+      const filtered = Boolean(category || days);
+      return rows
+        .map((r) => ({
+          id: r.id,
+          description: r.description,
+          date: r.date.slice(0, 10),
+          amount: r.amountInAccountCurrency ?? r.amount,
+          accountId: r.accountId,
+          accountName: owners.get(r.accountId) ?? "",
+          ...classes.get(r.id)!,
+        }))
+        .filter((r) => {
+          if (!filtered) return true;
+          if (r.nature !== "expense" && r.nature !== "refund") return false;
+          if (category && r.category !== category) return false;
+          const d = Number(r.date.slice(8, 10));
+          return !days || (d >= days.from && d <= days.to);
+        });
     },
   };
 }

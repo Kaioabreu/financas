@@ -3,9 +3,10 @@ import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AccountSummary, ConnectionSummary, TransactionRow } from "../../src/core/connections";
 import { useCore } from "../../src/shell/appCore";
-import { monthLabel, shiftMonth, useMonth } from "../../src/shell/month";
-import { useRouter } from "expo-router";
-import type { CpfStatus } from "../../src/core/classification";
+import { MonthBar } from "../../src/shell/MonthBar";
+import { useMonth } from "../../src/shell/month";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import type { AppCategory, CpfStatus } from "../../src/core/classification";
 import { categoryLabel, natureLabel, originLabel } from "../../src/shell/labels";
 import { Body, Fine, font, LinkText, usePalette } from "../../src/shell/theme";
 import { EditSheet } from "../../src/shell/EditSheet";
@@ -16,7 +17,11 @@ export default function Transacoes() {
   const core = useCore();
   const c = usePalette();
   const insets = useSafeAreaInsets();
-  const { month, setMonth } = useMonth();
+  const { month } = useMonth();
+  const params = useLocalSearchParams<{ category?: string; from?: string; to?: string }>();
+  const category = params.category as AppCategory | undefined;
+  const days = params.from && params.to ? { from: Number(params.from), to: Number(params.to) } : undefined;
+  const filtered = Boolean(category || days);
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [rows, setRows] = useState<TransactionRow[]>([]);
@@ -48,7 +53,11 @@ export default function Transacoes() {
       setCpf(await core.cpfStatus());
       const id = selected ?? list[0]?.id ?? null;
       if (id !== selected) setSelected(id);
-      if (id) {
+      // Coming from Gastos, the list covers every account and only what that slice summed.
+      if (filtered) {
+        const found = await core.listTransactions({ month, category, days });
+        if (alive) setRows(found);
+      } else if (id) {
         const found = await core.listTransactions({ accountId: id, month });
         if (alive) setRows(found);
       }
@@ -59,7 +68,7 @@ export default function Transacoes() {
       alive = false;
       clearInterval(timer);
     };
-  }, [core, month, selected]);
+  }, [core, month, selected, filtered, category, days?.from, days?.to]);
 
   const itemId = accounts.find((a) => a.id === selected)?.itemId;
   const dataAtIso = connections.find((x) => x.itemId === itemId)?.dataAt;
@@ -67,17 +76,9 @@ export default function Transacoes() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 24 }}>
-        <Pressable onPress={() => setMonth(shiftMonth(month, -1))} hitSlop={12} accessibilityLabel="Mês anterior">
-          <Text style={{ fontFamily: font.medium, fontSize: 22, color: c.ink }}>‹</Text>
-        </Pressable>
-        <View style={{ alignItems: "center", gap: 2 }}>
-          <Text style={{ fontFamily: font.semibold, fontSize: 18, color: c.ink }}>{monthLabel(month)}</Text>
-          <LinkText onPress={() => router.push("/regras")}>Regras</LinkText>
-        </View>
-        <Pressable onPress={() => setMonth(shiftMonth(month, 1))} hitSlop={12} accessibilityLabel="Próximo mês">
-          <Text style={{ fontFamily: font.medium, fontSize: 22, color: c.ink }}>›</Text>
-        </Pressable>
+      <MonthBar />
+      <View style={{ alignItems: "center", marginTop: 2 }}>
+        <LinkText onPress={() => router.push("/regras")}>Regras</LinkText>
       </View>
       <ScrollView
         horizontal
@@ -100,6 +101,19 @@ export default function Transacoes() {
           </Pressable>
         ))}
       </ScrollView>
+      {filtered ? (
+        <View style={{ paddingHorizontal: 24, marginTop: 12, flexDirection: "row" }}>
+          <Pressable
+            onPress={() => router.setParams({ category: undefined, from: undefined, to: undefined })}
+            accessibilityLabel="Limpar filtro"
+            style={{ backgroundColor: c.track, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}
+          >
+            <Text style={{ fontFamily: font.medium, fontSize: 14, color: c.ink }}>
+              {category ? categoryLabel[category].name : `Dias ${days!.from} a ${days!.to}`} ✕
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
       {dataAt ? <View style={{ paddingHorizontal: 24, marginTop: 8 }}><Fine>Dados de {dataAt}</Fine></View> : null}
       {notice ? <View style={{ paddingHorizontal: 24, marginTop: 4 }}><Fine>{notice}</Fine></View> : null}
       {cpf?.state === "needed" && accounts.length ? (

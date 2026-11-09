@@ -16,6 +16,8 @@ export default function AbasLayout() {
           tabBarIcon: () => null,
         }}
       >
+        <Tabs.Screen name="resumo" options={{ title: "Resumo" }} />
+        <Tabs.Screen name="gastos" options={{ title: "Gastos" }} />
         <Tabs.Screen name="transacoes" options={{ title: "Transações" }} />
       </Tabs>
     </MonthProvider>
