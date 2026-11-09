@@ -7,6 +7,7 @@ import type { Core } from "../src/core/createCore";
 import { CoreProvider, createAppCore } from "../src/shell/appCore";
 import { openAppVault } from "../src/shell/openDatabase";
 import { usePalette } from "../src/shell/theme";
+import { FundQuotasSheet } from "../src/shell/FundQuotasSheet";
 import { LockScreen } from "../src/shell/LockScreen";
 import { ErrorScreen } from "../src/shell/ErrorScreen";
 
@@ -66,6 +67,7 @@ export default function RootLayout() {
       <CoreProvider value={state.core}>
         <RestartContext.Provider value={restart}>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }} />
+          <FundQuotasSheet />
           <LockScreen core={state.core} />
         </RestartContext.Provider>
       </CoreProvider>

@@ -1,6 +1,7 @@
 import Constants from "expo-constants";
 import * as Crypto from "expo-crypto";
 import * as LocalAuthentication from "expo-local-authentication";
+import * as Network from "expo-network";
 import * as SecureStore from "expo-secure-store";
 import { createContext, useContext } from "react";
 import { embeddedConfig } from "../core/config";
@@ -32,6 +33,11 @@ export function createAppCore(orm: unknown): Core {
     },
     randomHex: (n) => Array.from(Crypto.getRandomBytes(n), (b) => b.toString(16).padStart(2, "0")).join(""),
     deviceHasLock: async () => (await LocalAuthentication.getEnrolledLevelAsync()) !== LocalAuthentication.SecurityLevel.NONE,
+    network: async () => {
+      const state = await Network.getNetworkStateAsync().catch(() => null);
+      if (!state || state.isConnected === false) return "offline";
+      return state.type === Network.NetworkStateType.WIFI || state.type === Network.NetworkStateType.ETHERNET ? "wifi" : "cellular";
+    },
     env: { appVersion: Constants.expoConfig?.version ?? "?", otaId: Constants.manifest2?.id ?? null },
   });
   return currentCore;

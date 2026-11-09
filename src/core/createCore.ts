@@ -42,6 +42,8 @@ export interface CoreDeps {
   passwordHash: (password: string, salt: string) => Promise<string>;
   /** `n` random bytes as hex, for the verifier's salt. */
   randomHex: (n: number) => string;
+  /** The kind of network now; the fund quotas (~135 MB) download freely only on Wi-Fi. Defaults to Wi-Fi. */
+  network?: () => Promise<"wifi" | "cellular" | "offline">;
 }
 
 export type BackupPasswordResult = { ok: true } | { ok: false; reason: "too-short" | "mismatch" };
@@ -99,6 +101,10 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
    * erases the database, the SecureStore and the temporary backup file.
    */
   eraseAtPluggy(): Promise<{ failed: number }>;
+  /** True while the fund quotas wait for the user to choose on mobile data ("Baixar agora" / "Esperar o Wi-Fi"). */
+  fundQuotasPrompt(): Promise<boolean>;
+  /** Saves the choice in the database; "download" retries the pending estimates right away. */
+  answerFundQuotas(choice: "download" | "wait"): Promise<void>;
   /** Bloqueio por biometria: when to prompt, and the Segurança switch. */
   lock: LockApi;
   /** Do sistema (the default), Claro or Escuro. */
@@ -217,7 +223,7 @@ export function createCore(deps: CoreDeps): Core {
 
   const networth = createNetWorth({ db, clock: deps.clock });
 
-  const estimate = createEstimate({ db, fetch: deps.fetch, clock: deps.clock });
+  const estimate = createEstimate({ db, fetch: deps.fetch, clock: deps.clock, network: deps.network });
 
   const sync = createSync({
     estimate: estimate.run,
@@ -252,6 +258,10 @@ export function createCore(deps: CoreDeps): Core {
 
   return {
     lock,
+    fundQuotasPrompt: estimate.fundQuotasPrompt,
+    async answerFundQuotas(choice) {
+      await estimate.answerFundQuotas(choice);
+    },
     ...connections,
     ...summary,
     billGaps: bills.billGaps,

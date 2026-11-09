@@ -7,6 +7,7 @@
 import { eq, inArray } from "drizzle-orm";
 import { account, appMeta, bankTransaction, bill, connection, investment, investmentTransaction, snapshot } from "../db/schema";
 import type { CoreDatabase } from "./createCore";
+import { createFundQuotas, normalizeCnpj, quotaPath, QuotaSourceError, type FundQuotas, type NetworkKind } from "./fundQuotas";
 import { classOfInvestment, localDay, type Line } from "./networth";
 import { loadTreasuryPrices, matchTreasury, treasuryPath, treasuryRef, type TreasuryPrices } from "./treasury";
 
@@ -25,12 +26,15 @@ export interface EstimateState {
   failedSource: string | null;
   /** Closed after 7 days with a source still down: the assets that needed it follow the straight line. */
   closedWithStraightLine: boolean;
+  /** The fund quotas wait for the user to allow the download on mobile data. */
+  awaitingLicense?: boolean;
 }
 
 interface Deps {
   db: CoreDatabase;
   fetch: typeof fetch;
   clock: () => number;
+  network?: () => Promise<NetworkKind>;
 }
 
 type Account = typeof account.$inferSelect;
@@ -103,6 +107,7 @@ function treasuryOf(prices: TreasuryPrices, inv: Investment, extra: any, ops: Op
 
 export function createEstimate(deps: Deps) {
   const { db } = deps;
+  const fundQuotas = createFundQuotas({ db, fetch: deps.fetch, network: deps.network });
 
   async function readMeta(key: string): Promise<string | null> {
     return (await db.select().from(appMeta).where(eq(appMeta.key, key)))[0]?.value ?? null;
@@ -184,7 +189,7 @@ export function createEstimate(deps: Deps) {
       try {
         await job();
       } catch (error) {
-        sources.failed = error instanceof SourceFailed ? error.source : "fonte";
+        sources.failed = error instanceof SourceFailed || error instanceof QuotaSourceError ? error.source : "fonte";
       }
     };
     if (kinds.has("cdi")) await load(async () => void (sources.cdi = await series(12, W, D)));
@@ -199,6 +204,19 @@ export function createEstimate(deps: Deps) {
         sources.ipca = merged;
       });
     }
+    // ---- the fund quotas (CVM) ----
+    let quotas: FundQuotas = { byCnpj: new Map() };
+    current.awaitingLicense = false;
+    const cnpjOf = (inv: Investment) => (inv.type === "MUTUAL_FUND" ? (normalizeCnpj(parse(inv.extra).code) ?? normalizeCnpj(parse(inv.extra).issuerCNPJ)) : null);
+    const fundCnpjs = [...new Set(investments.map(cnpjOf).filter((c): c is string => c !== null))];
+    await load(async () => {
+      try {
+        quotas = await fundQuotas.load(fundCnpjs, W, D);
+      } catch (error) {
+        if (error instanceof QuotaSourceError) current.awaitingLicense = error.waiting;
+        throw error;
+      }
+    });
     // Treasury bonds: the official price (a failure follows the same retry rule as the other sources)
     let treasury: TreasuryPrices | null = null;
     if (investments.some((i) => isTreasury(i) && treasuryRef(i, parse(i.extra)))) {
@@ -226,6 +244,9 @@ export function createEstimate(deps: Deps) {
       const idx = indexings.get(inv.id);
       const bond = treasury && isTreasury(inv) ? treasuryOf(treasury, inv, extra, ops, D, days) : null;
       if (bond) return { cls: classOfInvestment(inv.type), values: bond };
+      const cnpj = cnpjOf(inv);
+      const fund = cnpj ? quotaPath(quotas.byCnpj.get(cnpj) ?? new Map(), num(extra.amountWithdrawal ?? inv.balance), fundPosition(inv, extra, ops.filter((o) => o.investmentId === inv.id)), D, days) : null;
+      if (fund) return { cls: classOfInvestment(inv.type), values: fund };
       const usable = idx && (idx.kind === "pre" || (idx.kind === "cdi" && sources.cdi) || (idx.kind === "ipca" && sources.ipca));
       return {
         cls: classOfInvestment(inv.type),
@@ -260,7 +281,23 @@ export function createEstimate(deps: Deps) {
     await save();
   }
 
-  return { run };
+  /** A pending estimate waits for the licence and the user has not chosen yet. */
+  async function fundQuotasPrompt(): Promise<boolean> {
+    if (await fundQuotas.choice()) return false;
+    const rows = await db.select().from(connection);
+    return rows.some((r) => {
+      const e: EstimateState | null = r.estimate ? JSON.parse(r.estimate) : null;
+      return e?.state === "pending" && e.awaitingLicense === true;
+    });
+  }
+
+  async function answerFundQuotas(choice: "download" | "wait") {
+    await fundQuotas.setChoice(choice);
+    if (choice !== "download") return;
+    for (const r of await db.select().from(connection)) if (r.estimate) await run(r.itemId);
+  }
+
+  return { run, fundQuotasPrompt, answerFundQuotas };
 }
 
 // ---------------------------------------------------------------- accounts
@@ -394,4 +431,14 @@ function straightPath(inv: Investment, extra: any, rows: Operation[], D: string,
     out[day] = existed ? qAt(day) * priceAt(day) * k : 0;
   }
   return out;
+}
+
+/** What the quota path needs of a fund: the quantity now, the operations that changed it and the purchase day. */
+function fundPosition(inv: Investment, extra: any, rows: Operation[]) {
+  const qtyNow = num(extra.quantity) > 0 ? num(extra.quantity) : 1;
+  const ops =
+    num(extra.quantity) > 0
+      ? rows.filter((o) => (o.type === "BUY" || o.type === "SELL") && num(o.quantity) > 0).map((o) => ({ date: o.date.slice(0, 10), qty: (o.type === "BUY" ? 1 : -1) * num(o.quantity) }))
+      : [];
+  return { qtyNow, ops, start: startOf(extra) };
 }

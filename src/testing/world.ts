@@ -62,6 +62,7 @@ export class FakeFetch {
 }
 
 function jsonResponse({ status = 200, body = {}, raw, headers = {} }: FakeResponse): Response {
+  if (body instanceof Uint8Array) return new Response(body as BodyInit, { status, headers: { "content-type": "application/zip", ...headers } });
   if (status === 204) return new Response(null, { status, headers });
   if (raw !== undefined) return new Response(raw, { status, headers });
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
@@ -121,6 +122,7 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
   const fake = new FakeFetch();
   const clock = new FakeClock(Date.parse(options.startAt ?? "2026-11-09T12:00:00.000Z"));
   const secret = new FakeSecretStore();
+  const network = { value: "wifi" as "wifi" | "cellular" | "offline" };
   const build = (override: Partial<EmbeddedConfig> = {}): Core =>
     createCore({
       db: db as never,
@@ -133,6 +135,7 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
       passwordHash: async (password, salt) => createHash("sha256").update(`${salt}:${password}`).digest("hex"),
       randomHex: (n) => randomBytes(n).toString("hex"),
       deviceHasLock: async () => options.deviceHasLock ?? true,
+      network: async () => network.value,
     });
-  return { core: build(), dumpMeta: async () => sqlite.prepare("select * from app_meta").all(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>) => build(config), fetch: fake, clock, secret };
+  return { core: build(), dumpMeta: async () => sqlite.prepare("select * from app_meta").all(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>) => build(config), fetch: fake, clock, secret, network };
 }
