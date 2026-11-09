@@ -135,7 +135,7 @@ O grupo em que um item do patrimônio aparece na distribuição: Caixa, Renda fi
 _Avoid_: mercado, tipo, categoria (reservada para gastos)
 
 **Retrato**:
-O valor de cada conta, investimento, cofrinho e dívida num dia. O app guarda um quando sincroniza; os meses antes da instalação têm retratos estimados a partir das transações e das operações de investimento. Cada mês da evolução usa o último retrato do mês.
+O valor de cada conta, investimento, cofrinho e dívida num dia. O app guarda um quando sincroniza; os 12 meses antes da primeira leitura de cada banco têm retratos estimados a partir das transações e das operações de investimento. Cada mês da evolução usa o último retrato do mês.
 _Avoid_: foto, snapshot
 
 **Valorização**:
