@@ -1,6 +1,9 @@
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { ConnectionSummary } from "../../src/core/connections";
+import { bankNames, readTime, stateLabel } from "../../src/shell/connectionLabels";
 import type { MonthPoint, MonthSummary } from "../../src/core/summary";
 import { useCore } from "../../src/shell/appCore";
 import { useChartColors } from "../../src/shell/chartColors";
@@ -20,14 +23,17 @@ export default function Resumo() {
   const { month } = useMonth();
   const [summary, setSummary] = useState<MonthSummary | null>(null);
   const [history, setHistory] = useState<MonthPoint[]>([]);
+  const [connections, setConnections] = useState<ConnectionSummary[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
-      const [s, h] = await Promise.all([core.monthSummary(month), core.monthHistory(month, 6)]);
+      const [s, h, conns] = await Promise.all([core.monthSummary(month), core.monthHistory(month, 6), core.listConnections()]);
       if (alive) {
         setSummary(s);
         setHistory(h);
+        setConnections(conns);
       }
     };
     void load();
@@ -45,6 +51,7 @@ export default function Resumo() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>
       <MonthBar />
+      <StatusLine connections={connections} onPress={() => router.push("/conexoes")} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32 }}>
         {summary ? (
           <>
@@ -129,5 +136,23 @@ function Legend({ color, label }: { color: string; label: string }) {
       <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: color }} />
       <Fine>{label}</Fine>
     </View>
+  );
+}
+
+/** Under the month: the banks and the last read, or what needs attention. Opens Conexões. */
+function StatusLine({ connections, onPress }: { connections: ConnectionSummary[]; onPress: () => void }) {
+  const c = usePalette();
+  if (connections.length === 0) return null;
+  const attention = connections.find((x) => stateLabel(x).attention);
+  const last = connections.map((x) => x.lastReadAt).filter((x): x is string => Boolean(x)).sort().pop() ?? null;
+  const text = attention
+    ? attention.state === "expired"
+      ? `A conexão com o ${attention.bankName} venceu · Renovar`
+      : `A conexão com o ${attention.bankName} vence em ${Math.max(attention.daysLeft ?? 0, 0)} dias · Renovar`
+    : `${bankNames(connections.map((x) => x.bankName))} · ${connections.some((x) => x.state === "reading") ? "Lendo…" : readTime(last)}`;
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" style={{ paddingHorizontal: 24, paddingTop: 10 }}>
+      <Text style={{ fontFamily: font.regular, fontSize: 13.5, color: attention ? c.neg : c.ink2, textAlign: "center" }}>{text}</Text>
+    </Pressable>
   );
 }

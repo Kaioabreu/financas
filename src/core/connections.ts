@@ -1,6 +1,6 @@
 // Core: connecting a bank through Meu Pluggy, and the first read of its data.
-import { and, desc, eq, like } from "drizzle-orm";
-import { account, bankTransaction, connection } from "../db/schema";
+import { and, desc, eq, inArray, like, ne } from "drizzle-orm";
+import { account, bankTransaction, bill, connection, identity, investment, investmentTransaction } from "../db/schema";
 import type { Classification, ClassificationSource, ClassifiedAs } from "./classification";
 import type { EmbeddedConfig } from "./config";
 import type { CoreDatabase } from "./createCore";
@@ -14,9 +14,25 @@ export interface ConnectError {
 export type StartConnectResult =
   | { ok: true; itemId: string; authUrl: string }
   | { ok: false; error: ConnectError };
-export type FinishConnectResult = { ok: true } | { ok: false; reason: "closed" | "expired" };
+/** `renewed` is true when the item was a known bank's new authorization, not a new Connection. */
+export type FinishConnectResult = { ok: true; renewed?: true } | { ok: false; reason: "closed" | "expired" };
 
 export type ReadState = "reading" | "done" | "failed";
+/** Days before the expiry from which the Connection asks to be renewed. */
+export const EXPIRY_WARNING_DAYS = 30;
+const DAY_MS = 86_400_000;
+export type ConnectionState = "reading" | "ok" | "expiring" | "expired";
+/** Days left of the authorization (rounded up), or null when Pluggy sent no expiry. */
+export function daysUntil(expiresAt: string | null, now: number): number | null {
+  const at = expiresAt ? Date.parse(expiresAt) : NaN;
+  return Number.isNaN(at) ? null : Math.ceil((at - now) / DAY_MS);
+}
+/** An expired Connection stops syncing and keeps its data. */
+export function isExpired(expiresAt: string | null, now: number): boolean {
+  const at = expiresAt ? Date.parse(expiresAt) : NaN;
+  return !Number.isNaN(at) && now >= at;
+}
+
 export interface ConnectionSummary {
   itemId: string;
   bankName: string;
@@ -25,6 +41,12 @@ export interface ConnectionSummary {
   dataAt: string | null;
   /** True when the last full read was held back by the 20% lock. */
   lockTriggered: boolean;
+  /** The last finished read, as Pluggy dated it (lastUpdatedAt). */
+  lastReadAt: string | null;
+  consentExpiresAt: string | null;
+  /** Days left of the authorization; null when unknown. */
+  daysLeft: number | null;
+  state: ConnectionState;
 }
 export interface AccountSummary {
   id: string;
@@ -58,6 +80,11 @@ export interface ConnectionsApi {
    * closed without authorizing, when Pluggy marks it OUTDATED, or after the timeout.
    */
   finishConnect(itemId: string, options: { tabClosed: Promise<void> }): Promise<FinishConnectResult>;
+  /**
+   * Deletes the item at Pluggy and this bank's local data (accounts, transactions, bills,
+   * investments, operations, identity). Rules and hand edits stay.
+   */
+  removeConnection(itemId: string): Promise<void>;
   listConnections(): Promise<ConnectionSummary[]>;
   listAccounts(): Promise<AccountSummary[]>;
   /**
@@ -126,7 +153,58 @@ export function createConnections(deps: Deps): ConnectionsApi {
     }
   }
 
+  /** The Connection that already holds one of the new item's account, card or investment ids. */
+  async function knownOwner(newItemId: string): Promise<string | null> {
+    const ids: string[] = [];
+    for (const path of ["/accounts", "/investments"]) {
+      try {
+        const response = await deps.request("GET", `${path}?itemId=${newItemId}`);
+        if (response.status !== 200) continue;
+        const results = ((await json(response))?.results ?? []) as { id?: string }[];
+        ids.push(...results.map((r) => r.id).filter((id): id is string => Boolean(id)));
+      } catch {
+        // Unreadable: treated as a new Connection.
+      }
+    }
+    if (!ids.length) return null;
+    const hit =
+      (await db.select({ itemId: account.itemId }).from(account).where(and(inArray(account.id, ids), ne(account.itemId, newItemId))))[0] ??
+      (await db.select({ itemId: investment.itemId }).from(investment).where(and(inArray(investment.id, ids), ne(investment.itemId, newItemId))))[0];
+    if (!hit) return null;
+    const [conn] = await db.select().from(connection).where(eq(connection.itemId, hit.itemId));
+    return conn ? conn.itemId : null;
+  }
+
+  /** The Connection moves to the new item; data and hand edits stay untouched. */
+  async function renew(oldItemId: string, newItemId: string, current: PluggyItem) {
+    const [old] = await db.select().from(connection).where(eq(connection.itemId, oldItemId));
+    await db.insert(connection).values({ ...old!, itemId: newItemId, readState: "reading", consentExpiresAt: current.consentExpiresAt ?? null });
+    await db.update(account).set({ itemId: newItemId }).where(eq(account.itemId, oldItemId));
+    await db.update(investment).set({ itemId: newItemId }).where(eq(investment.itemId, oldItemId));
+    await db.update(identity).set({ itemId: newItemId }).where(eq(identity.itemId, oldItemId));
+    await db.delete(connection).where(eq(connection.itemId, oldItemId));
+    await deleteItem(oldItemId);
+  }
+
   return {
+    async removeConnection(itemId) {
+      await deleteItem(itemId);
+      const accountIds = (await db.select({ id: account.id }).from(account).where(eq(account.itemId, itemId))).map((a) => a.id);
+      const investmentIds = (await db.select({ id: investment.id }).from(investment).where(eq(investment.itemId, itemId))).map((i) => i.id);
+      for (let i = 0; i < accountIds.length; i += 400) {
+        const chunk = accountIds.slice(i, i + 400);
+        await db.delete(bankTransaction).where(inArray(bankTransaction.accountId, chunk));
+        await db.delete(bill).where(inArray(bill.accountId, chunk));
+      }
+      for (let i = 0; i < investmentIds.length; i += 400) {
+        await db.delete(investmentTransaction).where(inArray(investmentTransaction.investmentId, investmentIds.slice(i, i + 400)));
+      }
+      await db.delete(investment).where(eq(investment.itemId, itemId));
+      await db.delete(account).where(eq(account.itemId, itemId));
+      await db.delete(identity).where(eq(identity.itemId, itemId));
+      await db.delete(connection).where(eq(connection.itemId, itemId));
+    },
+
     async startConnect() {
       let created: Response;
       try {
@@ -162,6 +240,11 @@ export function createConnections(deps: Deps): ConnectionsApi {
       while (true) {
         const current = await getItem(itemId);
         if (current?.status === "UPDATED") {
+          const owner = await knownOwner(itemId);
+          if (owner) {
+            await renew(owner, itemId, current);
+            return { ok: true, renewed: true };
+          }
           await db
             .insert(connection)
             .values({
@@ -195,7 +278,28 @@ export function createConnections(deps: Deps): ConnectionsApi {
 
     async listConnections() {
       const rows = await db.select().from(connection);
-      return rows.map((r) => ({ itemId: r.itemId, bankName: r.bankName, readState: r.readState as ReadState, dataAt: r.dataAt, lockTriggered: r.lockTriggered }));
+      const now = deps.clock();
+      return rows.map((r) => {
+        const daysLeft = daysUntil(r.consentExpiresAt, now);
+        const state: ConnectionState = isExpired(r.consentExpiresAt, now)
+          ? "expired"
+          : r.readState === "reading"
+            ? "reading"
+            : daysLeft !== null && daysLeft <= EXPIRY_WARNING_DAYS
+              ? "expiring"
+              : "ok";
+        return {
+          itemId: r.itemId,
+          bankName: r.bankName,
+          readState: r.readState as ReadState,
+          dataAt: r.dataAt,
+          lockTriggered: r.lockTriggered,
+          lastReadAt: r.lastReadAt,
+          consentExpiresAt: r.consentExpiresAt,
+          daysLeft,
+          state,
+        };
+      });
     },
 
     async listAccounts() {

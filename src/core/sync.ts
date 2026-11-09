@@ -11,6 +11,7 @@ import {
   investmentTransaction,
 } from "../db/schema";
 import type { EmbeddedConfig } from "./config";
+import { isExpired } from "./connections";
 import type { CoreDatabase } from "./createCore";
 
 export interface SyncNotice {
@@ -43,6 +44,7 @@ export interface SyncApi {
 interface Deps {
   db: CoreDatabase;
   config: EmbeddedConfig;
+  clock: () => number;
   sleep: (ms: number) => Promise<void>;
   request: (method: string, path: string, body?: unknown) => Promise<Response>;
   /** The lock held back a read: the biggest share of a product it would have deleted (0-100). */
@@ -423,6 +425,8 @@ export function createSync(deps: Deps): SyncApi {
   /** Runs one Connection's read. Resolves true when it failed. */
   async function read(itemId: string, force: boolean): Promise<boolean> {
     if (inFlight.has(itemId)) return false;
+    const [due] = await db.select({ at: connection.consentExpiresAt }).from(connection).where(eq(connection.itemId, itemId));
+    if (due && isExpired(due.at, deps.clock())) return false; // expired: no sync, the data stays
     inFlight.add(itemId);
     try {
       await mirrorRead(itemId, force);
