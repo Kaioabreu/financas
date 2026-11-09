@@ -12,6 +12,8 @@ import * as schema from "../db/schema";
 export interface FakeResponse {
   status?: number;
   body?: unknown;
+  /** A raw body (text or stream) sent as is, not as JSON. */
+  raw?: BodyInit;
   headers?: Record<string, string>;
 }
 export interface RecordedCall {
@@ -59,8 +61,9 @@ export class FakeFetch {
   };
 }
 
-function jsonResponse({ status = 200, body = {}, headers = {} }: FakeResponse): Response {
+function jsonResponse({ status = 200, body = {}, raw, headers = {} }: FakeResponse): Response {
   if (status === 204) return new Response(null, { status, headers });
+  if (raw !== undefined) return new Response(raw, { status, headers });
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 }
 
