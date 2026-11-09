@@ -9,6 +9,7 @@ import { createConnections, type ConnectionsApi } from "./connections";
 import { createSync, type SyncApi } from "./sync";
 import { createEstimate } from "./estimate";
 import { createNetWorth, type NetWorthApi } from "./networth";
+import { createPerformance, type PerformanceApi } from "./performance";
 import { createSummary, type SummaryApi } from "./summary";
 import { createBills, type BillsApi } from "./bills";
 import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
@@ -44,6 +45,8 @@ export interface CoreDeps {
   randomHex: (n: number) => string;
   /** Reads and swaps in a Backup file (needs SQLCipher, so the shell supplies it). */
   restoreFile?: BackupFilePort;
+  /** The kind of network now; the fund quotas (~135 MB) download freely only on Wi-Fi. Defaults to Wi-Fi. */
+  network?: () => Promise<"wifi" | "cellular" | "offline">;
 }
 
 export type BackupPasswordResult = { ok: true } | { ok: false; reason: "too-short" | "mismatch" };
@@ -71,7 +74,7 @@ export type CredentialsStatus = { saved: false } | { saved: true; clientId: stri
 
 export type Appearance = "system" | "light" | "dark";
 
-export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, SummaryApi, NetWorthApi, BillsApi {
+export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, SummaryApi, NetWorthApi, BillsApi, PerformanceApi {
   /** The "Copiar diagnóstico" text: only allow-listed facts, never amounts, names or ids. */
   diagnostic(): Promise<string>;
   credentialsStatus(): Promise<CredentialsStatus>;
@@ -102,6 +105,16 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
    * checks the Client Secret against the Client ID that came in the backup, then replaces everything.
    */
   restoreBackup(input: RestoreInput): Promise<RestoreResult>;
+  /**
+   * "Apagar tudo", Pluggy half: tries DELETE /items/{id} on every Connection and carries on when one
+   * fails. Returns how many failed (404, an item already gone, counts as erased). The shell then
+   * erases the database, the SecureStore and the temporary backup file.
+   */
+  eraseAtPluggy(): Promise<{ failed: number }>;
+  /** True while the fund quotas wait for the user to choose on mobile data ("Baixar agora" / "Esperar o Wi-Fi"). */
+  fundQuotasPrompt(): Promise<boolean>;
+  /** Saves the choice in the database; "download" retries the pending estimates right away. */
+  answerFundQuotas(choice: "download" | "wait"): Promise<void>;
   /** Bloqueio por biometria: when to prompt, and the Segurança switch. */
   lock: LockApi;
   /** Do sistema (the default), Claro or Escuro. */
@@ -220,7 +233,7 @@ export function createCore(deps: CoreDeps): Core {
 
   const networth = createNetWorth({ db, clock: deps.clock });
 
-  const estimate = createEstimate({ db, fetch: deps.fetch, clock: deps.clock });
+  const estimate = createEstimate({ db, fetch: deps.fetch, clock: deps.clock, network: deps.network });
 
   const sync = createSync({
     estimate: estimate.run,
@@ -237,6 +250,14 @@ export function createCore(deps: CoreDeps): Core {
 
   const summary = createSummary({ db, clock: deps.clock, classify: classification.classify });
 
+  const performance = createPerformance({
+    db,
+    fetch: deps.fetch,
+    clock: deps.clock,
+    monthSummary: summary.monthSummary,
+    portfolioNow: async () => (await networth.netWorth()).classes.filter((k) => k.class !== "cash").reduce((s, k) => s + k.value, 0),
+  });
+
   const lock = createLock({
     clock: deps.clock,
     readEnabled: async () => (await readMeta(LOCK_KEY)) !== "0",
@@ -247,10 +268,15 @@ export function createCore(deps: CoreDeps): Core {
 
   return {
     lock,
+    fundQuotasPrompt: estimate.fundQuotasPrompt,
+    async answerFundQuotas(choice) {
+      await estimate.answerFundQuotas(choice);
+    },
     ...connections,
     ...summary,
     billGaps: bills.billGaps,
     netWorth: networth.netWorth,
+    performance: performance.performance,
     ...sync,
     cpfStatus: classification.cpfStatus,
     setCpf: classification.setCpf,
@@ -350,6 +376,19 @@ export function createCore(deps: CoreDeps): Core {
       await db.delete(appMeta).where(like(appMeta.key, `${snoozeKey("")}%`));
       await deps.secret.delete();
       apiKey = null;
+    },
+
+    async eraseAtPluggy() {
+      let failed = 0;
+      for (const { itemId } of await connections.listConnections()) {
+        try {
+          const response = await request("DELETE", `/items/${itemId}`);
+          if (!response.ok && response.status !== 404) failed++;
+        } catch {
+          failed++;
+        }
+      }
+      return { failed };
     },
 
     async appearance() {

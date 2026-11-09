@@ -4,7 +4,7 @@ import type { Core } from "../core/createCore";
 import { refuseInspection, type RestoreInput, type RestoreResult } from "../core/restore";
 import { createAppCore } from "./appCore";
 import { restoreFilePort } from "./backupFile";
-import { eraseUnreadableDatabase, openAppVault } from "./openDatabase";
+import { eraseLocalData, openAppVault } from "./openDatabase";
 import { RestoreForm } from "./RestoreForm";
 import { Body, Button, font, Screen, usePalette } from "./theme";
 
@@ -26,7 +26,7 @@ export function UnreadableDatabase({ onOpen }: { onOpen: (core: Core) => void })
 
   async function startOver() {
     setBusy(true);
-    await eraseUnreadableDatabase();
+    await eraseLocalData();
     onOpen(await openFresh());
   }
 
@@ -37,7 +37,7 @@ export function UnreadableDatabase({ onOpen }: { onOpen: (core: Core) => void })
       const inspection = await restoreFilePort.inspect(input.uri, input.password);
       const refusal = refuseInspection(inspection, restoreFilePort.appMigrations);
       if (refusal) return refusal;
-      await eraseUnreadableDatabase();
+      await eraseLocalData();
       core = await openFresh();
       setFresh(core);
     }
