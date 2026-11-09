@@ -90,3 +90,57 @@ describe("Aparência", () => {
     expect(await w.restart().appearance()).toBe("system");
   });
 });
+
+describe("Apagar tudo", () => {
+  const SECOND = "11111111-0000-0000-0000-000000000002";
+
+  async function twoBanks() {
+    const w = await world();
+    w.fetch.on("GET", `${API}/items/${SECOND}`, { body: item({ id: SECOND, lastUpdatedAt: "2026-11-09T06:00:00.000Z" }) });
+    w.fetch.on("GET", `${API}/accounts`, {
+      body: page([account({ id: "22222222-0000-0000-0000-000000000009" })]),
+    });
+    await w.core.finishConnect(SECOND, { tabClosed: NEVER });
+    expect(await w.core.listConnections()).toHaveLength(2);
+    return w;
+  }
+
+  it("tenta DELETE /items/{id} em cada Conexão", async () => {
+    const w = await twoBanks();
+    w.fetch.on("DELETE", `${API}/items/${ITEM}`, { status: 204 });
+    w.fetch.on("DELETE", `${API}/items/${SECOND}`, { status: 204 });
+
+    expect(await w.core.eraseAtPluggy()).toEqual({ failed: 0 });
+
+    expect(w.fetch.callsTo("DELETE", `${API}/items/${ITEM}`)).toHaveLength(1);
+    expect(w.fetch.callsTo("DELETE", `${API}/items/${SECOND}`)).toHaveLength(1);
+  });
+
+  it("segue para as outras Conexões quando um DELETE falha, e conta a falha", async () => {
+    const w = await twoBanks();
+    w.fetch.on("DELETE", `${API}/items/${ITEM}`, { status: 500 });
+    w.fetch.on("DELETE", `${API}/items/${SECOND}`, { status: 204 });
+
+    expect(await w.core.eraseAtPluggy()).toEqual({ failed: 1 });
+    expect(w.fetch.callsTo("DELETE", `${API}/items/${SECOND}`)).toHaveLength(1);
+  });
+
+  it("conta tudo como falha quando está sem internet", async () => {
+    const w = await twoBanks();
+    w.fetch.goOffline();
+    expect(await w.core.eraseAtPluggy()).toEqual({ failed: 2 });
+  });
+
+  it("trata item que já não existe (404) como apagado", async () => {
+    const w = await twoBanks();
+    w.fetch.on("DELETE", `${API}/items/${ITEM}`, { status: 404 });
+    w.fetch.on("DELETE", `${API}/items/${SECOND}`, { status: 404 });
+    expect(await w.core.eraseAtPluggy()).toEqual({ failed: 0 });
+  });
+
+  it("sem Conexões, não chama a Pluggy", async () => {
+    const w = await createTestWorld();
+    expect(await w.core.eraseAtPluggy()).toEqual({ failed: 0 });
+    expect(w.fetch.calls).toHaveLength(0);
+  });
+});

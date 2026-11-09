@@ -7,7 +7,7 @@ import { createCore, type Core } from "../core/createCore";
 
 type Orm = Parameters<typeof createCore>[0]["db"];
 
-const SECRET_KEY = "pluggy-client-secret";
+export const SECRET_KEY = "pluggy-client-secret";
 
 /** The running core, for the error screen (which renders outside the provider). */
 export let currentCore: Core | null = null;

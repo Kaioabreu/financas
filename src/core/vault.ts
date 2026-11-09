@@ -31,7 +31,7 @@ export interface Vault<Orm> {
   cipherVersion: string;
 }
 
-const KEY_NAME = "db-key";
+export const KEY_NAME = "db-key";
 const KEY_BYTES = 32;
 
 function toHex(bytes: Uint8Array): string {
