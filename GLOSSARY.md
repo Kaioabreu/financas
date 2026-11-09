@@ -12,6 +12,10 @@ _Avoid_: cliente, conta (reservado para conta bancária)
 A autorização que o usuário dá no Meu Pluggy para o app ler os dados de um banco dele. Vence em 1 ano; renová-la exige um novo login do usuário e não muda os dados já lidos.
 _Avoid_: item, vínculo
 
+**Backup**:
+Arquivo cifrado que o usuário gera à mão com os dados do app e que só abre com a senha que ele escolheu. É o único jeito de os dados sobreviverem à perda do celular.
+_Avoid_: exportação, cópia de segurança
+
 ### Transações
 
 **Transação**:
