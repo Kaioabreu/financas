@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import type { EmbeddedConfig } from "./config";
 import { appMeta } from "../db/schema";
+import { createConnections, type ConnectionsApi } from "./connections";
 
 /** Works with both the sync (expo-sqlite) and async drivers: every query is awaited. */
 export type CoreDatabase = BaseSQLiteDatabase<"sync" | "async", unknown, Record<string, unknown>>;
@@ -21,6 +22,8 @@ export interface CoreDeps {
   /** Holds the Client Secret (the shell backs it with SecureStore). */
   secret: SecretStore;
   config: EmbeddedConfig;
+  /** Waits between polls; tests replace it to move the fake clock. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface Credentials {
@@ -40,7 +43,7 @@ export interface CredentialsError {
 export type SaveCredentialsResult = { ok: true } | { ok: false; error: CredentialsError };
 export type CredentialsStatus = { saved: false } | { saved: true; clientId: string };
 
-export interface Core {
+export interface Core extends ConnectionsApi {
   credentialsStatus(): Promise<CredentialsStatus>;
   /** Checks the credentials with Pluggy (POST /auth) and saves them only on a 200. */
   saveCredentials(input: Credentials): Promise<SaveCredentialsResult>;
@@ -96,7 +99,32 @@ export function createCore(deps: CoreDeps): Core {
     return json?.apiKey ? { apiKey: json.apiKey } : "unexpected";
   }
 
+  const request: Core["pluggyRequest"] = async (method, path, body) => {
+    if (!apiKey || deps.clock() >= apiKey.expiresAt) {
+      const clientId = await readMeta(CLIENT_ID_KEY);
+      const clientSecret = await deps.secret.get();
+      if (!clientId || !clientSecret) throw new Error("Credentials are not saved.");
+      const result = await authenticate({ clientId, clientSecret });
+      if (typeof result === "string") throw new Error(`Pluggy authentication failed (${result}).`);
+      apiKey = { value: result.apiKey, expiresAt: deps.clock() + config.apiKeyTtlMs };
+    }
+    return deps.fetch(`${config.pluggyBaseUrl}${path}`, {
+      method,
+      headers: { "X-API-KEY": apiKey.value, "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  };
+
+  const connections = createConnections({
+    db,
+    config,
+    clock: deps.clock,
+    sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+    request,
+  });
+
   return {
+    ...connections,
     async credentialsStatus() {
       const clientId = await readMeta(CLIENT_ID_KEY);
       const secret = await deps.secret.get();
@@ -117,20 +145,6 @@ export function createCore(deps: CoreDeps): Core {
       return { ok: true };
     },
 
-    async pluggyRequest(method, path, body) {
-      if (!apiKey || deps.clock() >= apiKey.expiresAt) {
-        const clientId = await readMeta(CLIENT_ID_KEY);
-        const clientSecret = await deps.secret.get();
-        if (!clientId || !clientSecret) throw new Error("Credentials are not saved.");
-        const result = await authenticate({ clientId, clientSecret });
-        if (typeof result === "string") throw new Error(`Pluggy authentication failed (${result}).`);
-        apiKey = { value: result.apiKey, expiresAt: deps.clock() + config.apiKeyTtlMs };
-      }
-      return deps.fetch(`${config.pluggyBaseUrl}${path}`, {
-        method,
-        headers: { "X-API-KEY": apiKey.value, "Content-Type": "application/json" },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
-    },
+    pluggyRequest: request,
   };
 }
