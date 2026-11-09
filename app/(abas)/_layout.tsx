@@ -19,6 +19,7 @@ export default function AbasLayout() {
         <Tabs.Screen name="resumo" options={{ title: "Resumo" }} />
         <Tabs.Screen name="gastos" options={{ title: "Gastos" }} />
         <Tabs.Screen name="transacoes" options={{ title: "Transações" }} />
+        <Tabs.Screen name="patrimonio" options={{ title: "Patrimônio" }} />
       </Tabs>
     </MonthProvider>
   );
