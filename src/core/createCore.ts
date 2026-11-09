@@ -10,6 +10,7 @@ import { createSync, type SyncApi } from "./sync";
 import { createEstimate } from "./estimate";
 import { createNetWorth, type NetWorthApi } from "./networth";
 import { createSummary, type SummaryApi } from "./summary";
+import { createBills, type BillsApi } from "./bills";
 import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
 import { createLock, type LockApi } from "./lock";
 import { buildNotices, readSnoozes, REFUSED_KEY, snoozeKey, SNOOZE_MS, type NoticeQueue } from "./status";
@@ -57,7 +58,7 @@ export type CredentialsStatus = { saved: false } | { saved: true; clientId: stri
 
 export type Appearance = "system" | "light" | "dark";
 
-export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, SummaryApi, NetWorthApi {
+export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, SummaryApi, NetWorthApi, BillsApi {
   /** The "Copiar diagnóstico" text: only allow-listed facts, never amounts, names or ids. */
   diagnostic(): Promise<string>;
   credentialsStatus(): Promise<CredentialsStatus>;
@@ -97,6 +98,7 @@ export function createCore(deps: CoreDeps): Core {
     env: deps.env ?? { appVersion: "?", otaId: null },
     states: async () => (await connections.listConnections()).map((c) => ({ itemId: c.itemId, state: c.state, cause: c.status?.causeCode ?? null })),
     credentialsRefused: () => credentialsRefused(),
+    billCounts: () => bills.otherBankCounts(),
   });
 
   async function readMeta(key: string): Promise<string | null> {
@@ -172,6 +174,8 @@ export function createCore(deps: CoreDeps): Core {
     return response;
   };
 
+  const bills = createBills({ db, config, clock: deps.clock });
+
   const classification = createClassification({ db, config });
 
   const connections = createConnections({
@@ -215,6 +219,7 @@ export function createCore(deps: CoreDeps): Core {
     lock,
     ...connections,
     ...summary,
+    billGaps: bills.billGaps,
     netWorth: networth.netWorth,
     ...sync,
     cpfStatus: classification.cpfStatus,

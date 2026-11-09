@@ -1,6 +1,8 @@
 import { useRouter } from "expo-router";
+import type { BillGap } from "../../src/core/bills";
+import { embeddedConfig } from "../../src/core/config";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NoticeQueue } from "../../src/core/status";
 import type { ConnectionSummary } from "../../src/core/connections";
@@ -25,18 +27,20 @@ export default function Resumo() {
   const [summary, setSummary] = useState<MonthSummary | null>(null);
   const [history, setHistory] = useState<MonthPoint[]>([]);
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
+  const [gaps, setGaps] = useState<BillGap[]>([]);
   const [queue, setQueue] = useState<NoticeQueue>({ shown: null, more: 0 });
   const router = useRouter();
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
-      const [s, h, conns, q] = await Promise.all([core.monthSummary(month), core.monthHistory(month, 6), core.listConnections(), core.notices()]);
+      const [s, h, conns, q, g] = await Promise.all([core.monthSummary(month), core.monthHistory(month, 6), core.listConnections(), core.notices(), core.billGaps({ month })]);
       if (alive) {
         setSummary(s);
         setHistory(h);
         setConnections(conns);
         setQueue(q);
+        setGaps(g);
       }
     };
     void load();
@@ -96,6 +100,14 @@ export default function Resumo() {
                   </View>
                 ))}
               <Row label="Gastos" value={money(summary.expenses)} color={c.neg} />
+              {gaps.map((g) => (
+                <View key={g.billId} style={{ paddingVertical: 6 }}>
+                  <Fine>
+                    {g.text} ·{" "}
+                    <LinkText onPress={() => Linking.openURL(`${embeddedConfig.guideUrl}#faltam-compras-numa-fatura`)}>Saiba mais</LinkText>
+                  </Fine>
+                </View>
+              ))}
               <Row
                 label="Aportes"
                 value={money(summary.contributions)}
