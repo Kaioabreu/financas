@@ -78,6 +78,15 @@ export function localDay(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Every stored Retrato, its payload unpacked. Shared by the Patrimônio and the Desempenho. */
+export async function readSnapshots(db: CoreDatabase) {
+  return (await db.select().from(snapshot)).map((r) => ({
+    date: r.date,
+    itemId: r.itemId,
+    ...(parse(r.payload) as { lines?: Line[]; unavailable?: boolean; estimated?: boolean }),
+  }));
+}
+
 export function classOfInvestment(type: string | null): AssetClass {
   switch (type) {
     case "FIXED_INCOME":
@@ -140,13 +149,7 @@ export function createNetWorth(deps: Deps) {
     return Math.max(0, owed);
   }
 
-  async function allSnapshots() {
-    return (await db.select().from(snapshot)).map((r) => ({
-      date: r.date,
-      itemId: r.itemId,
-      ...(parse(r.payload) as { lines?: Line[]; unavailable?: boolean; estimated?: boolean }),
-    }));
-  }
+  const allSnapshots = () => readSnapshots(db);
 
   return {
     /** Writes the Retrato of one Connection for today; a later one the same day replaces it. */

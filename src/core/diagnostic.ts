@@ -4,6 +4,8 @@
 // (state in the app: #34, estimate: #38, bill counts: #42).
 import { eq } from "drizzle-orm";
 import { appMeta, connection } from "../db/schema";
+import type { BillCounts } from "./bills";
+import type { ConnectionState } from "./connections";
 import type { CoreDatabase } from "./createCore";
 import type { EstimateState } from "./estimate";
 
@@ -52,7 +54,7 @@ interface DiagnosticData {
   connections: ConnectionRow[];
   credentialsRefused: boolean;
   /** Bill check counts of the cards of banks outside the validated list. Counts only. */
-  billCounts: { verified: number; matching: number; mismatching: number }[];
+  billCounts: BillCounts[];
 }
 
 /** A section turns the allowed data into lines. Add one here to grow the text. */
@@ -97,11 +99,11 @@ function estimateLine(e: EstimateState | null): string {
 
 const FACTS_KEY = "diagnostic.facts";
 const EMPTY: Facts = { authStatus: null, failure: null, items: {}, locks: {} };
-const ID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\b\d{6,}\b/gi;
+const ID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\b\d{6,}\b/gi;
 
 /** "/accounts/abc-123/x?itemId=..." -> "/accounts/{id}/x": ids and the query never leave. */
 export function sanitizeEndpoint(path: string): string {
-  return (path.split("?")[0] ?? "").replace(ID, "{id}");
+  return (path.split("?")[0] ?? "").replace(ID_PATTERN, "{id}");
 }
 
 const text = (value: unknown) => (typeof value === "string" ? value : null);
@@ -132,7 +134,7 @@ export interface Diagnostics {
   build(): Promise<string>;
 }
 
-const STATE_NAME: Record<string, string> = {
+const STATE_NAME: Record<ConnectionState, string> = {
   ok: "em dia",
   reading: "lendo",
   expiring: "vence em breve",
@@ -143,9 +145,9 @@ const STATE_NAME: Record<string, string> = {
 export function createDiagnostics(deps: {
   db: CoreDatabase;
   env: DiagnosticEnv;
-  states: () => Promise<{ itemId: string; state: string; cause: string | null }[]>;
+  states: () => Promise<{ itemId: string; state: ConnectionState; cause: string | null }[]>;
   credentialsRefused: () => Promise<boolean>;
-  billCounts: () => Promise<{ verified: number; matching: number; mismatching: number }[]>;
+  billCounts: () => Promise<BillCounts[]>;
 }): Diagnostics {
   const { db } = deps;
   let queue: Promise<unknown> = Promise.resolve();
@@ -189,7 +191,7 @@ export function createDiagnostics(deps: {
       const rows = await db.select().from(connection);
       const states = new Map((await deps.states()).map((s) => [s.itemId, s]));
       const connections: ConnectionRow[] = rows.map((r) => ({
-        appState: STATE_NAME[states.get(r.itemId)?.state ?? ""] ?? null,
+        appState: (states.has(r.itemId) ? STATE_NAME[states.get(r.itemId)!.state] : undefined) ?? null,
         appCause: states.get(r.itemId)?.cause ?? null,
         bankName: r.bankName,
         consentExpiresAt: r.consentExpiresAt,
