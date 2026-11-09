@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTÓTIPO · Telas fora das abas</title>
+<!--
+  PROTOTYPE, throwaway. Do not build on this code.
+  Round 1 of issue #18 ("Como devem ser as telas fora das abas?").
+  Visual language comes from prototype/telas-v1 (refino.html, variant B): Jost, white or black background, flat ruled lists.
+  Question now: how do the screens outside the four tabs hang off them?
+    A. Engrenagem: a gear on every tab opens Configurações, which pushes Conexões, which pushes one bank.
+    B. Duas portas: a status line on Resumo opens Conexões (banks expand in place); the gear (Resumo only) opens Configurações.
+    C. Página única: your initial on every tab opens one long page with everything, Conexões inline; flows open as sheets.
+  The leaf screens (onboarding, credentials, lock, backup, restore, edit, rules, errors, wipe, credits) are one shared proposal.
+  Switch with ?variant=A|B|C and the floating bar (keys ← →); the moon/sun button flips light/dark.
+  Sample data is invented. No value is real.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300..700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#d9d8d3;color:#1c1c1e;-webkit-font-smoothing:antialiased}
+body.dark-stage{background:#2a2a2c}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:inherit;letter-spacing:inherit}
+button:disabled{opacity:.35;cursor:default}
+:focus-visible{outline:2px solid #2D62B0;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- stage (not part of the design) ---------- */
+.stage{min-height:100vh;display:flex;gap:40px;align-items:center;justify-content:center;padding:28px 24px 100px}
+.phone{width:390px;height:800px;border-radius:48px;border:12px solid #17171a;background:#000;position:relative;overflow:hidden;box-shadow:0 40px 80px -30px rgba(0,0,0,.45);flex:none}
+#app{position:absolute;inset:0;overflow:hidden}
+#app>div{height:100%}
+#app *{scrollbar-width:none}
+#app *::-webkit-scrollbar{display:none}
+.notes{width:360px;font-size:14px;line-height:1.55;color:#33322f;max-height:800px;overflow:auto;padding-right:6px}
+.dark-stage .notes{color:#d8d6d0}
+.notes .n-tag{display:inline-block;background:#ffcc00;color:#111;font-weight:700;font-size:11px;letter-spacing:.06em;padding:3px 8px;border-radius:6px}
+.notes h1{font-size:22px;margin:10px 0 2px}
+.notes h2{font-size:17px;margin:14px 0 4px}
+.notes h3{font-size:13px;opacity:.7;margin:16px 0 6px}
+.notes ul{padding-left:18px}.notes li{margin:3px 0}
+.notes .go{display:flex;flex-wrap:wrap;gap:6px}
+.notes .go button{font-size:12.5px;padding:3px 10px;border:1px solid rgba(127,127,127,.45);border-radius:999px}
+.notes .go button:hover,.notes .sc button:hover{background:rgba(127,127,127,.15)}
+.notes .sc{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.notes .sc button{font-size:12.5px;padding:5px 9px;border:1px solid rgba(127,127,127,.45);border-radius:8px;text-align:left;line-height:1.3}
+.notes .sc b{display:block;font-weight:600}
+.notes .state{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:rgba(127,127,127,.12);border-radius:8px;padding:8px 10px;white-space:pre-wrap}
+.notes .fine{font-size:12px;opacity:.75;margin-top:12px}
+.switcher{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;background:#111;color:#fff;border-radius:999px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.35);z-index:1000;font-size:14px;outline:2px dashed #ffcc00;outline-offset:3px;font-family:system-ui,sans-serif}
+.switcher button{width:38px;height:38px;border-radius:50%;color:#fff;font-size:18px;text-align:center}
+.switcher button:hover{background:#333}
+.switcher .lbl{padding:0 10px;min-width:170px;text-align:center;font-weight:600;white-space:nowrap}
+.switcher .sep{width:1px;height:22px;background:#444;margin:0 4px}
+@media (max-width:860px){.notes{display:none}}
+@media (max-width:520px){.stage{padding:0;display:block}.phone{width:100vw;height:100vh;height:100dvh;border:0;border-radius:0}.switcher{top:8px;bottom:auto;font-size:12px}.switcher .lbl{min-width:110px}.switcher button{width:30px;height:30px}}
+
+/* ---------- the look (from refino.html, variant B: Jost) ---------- */
+.r3{--bg:#FFFFFF;--ink:#111418;--ink2:#5E6670;--rule:#E7E9EC;--track:#F0F2F4;--acc:#2D62B0;--pos:#1E7A4C;--neg:#B8325A;--warn:#8F6200;
+  background:var(--bg);color:var(--ink);font-family:'Jost',sans-serif;font-weight:400;display:flex;flex-direction:column;position:relative}
+.r3.dark{--bg:#000000;--ink:#F2F3F5;--ink2:#9AA1AA;--rule:#202328;--track:#16181B;--acc:#6E9BE6;--pos:#4CC38A;--neg:#E0577F;--warn:#D4A12A}
+.r3 .num{font-variant-numeric:tabular-nums;font-weight:500}
+.r3 .ttl{font-weight:500}
+.r3-head{padding:22px 22px 4px}
+.r3-top{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:40px}
+.r3-top .acts{display:flex;align-items:center;gap:12px}
+.r3-title{font-size:32px;letter-spacing:-.02em;line-height:1.1;font-weight:500}
+.r3-title.mid{font-size:28px}
+.r3-back{display:flex;align-items:center;gap:2px;margin:-6px 0 8px -8px;font-size:14px;color:var(--ink2);padding:4px 8px 4px 4px}
+.r3-link{font-size:13.5px;color:var(--acc);font-weight:500}
+.hbtn{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;color:var(--ink);margin-right:-6px}
+.avatar{width:34px;height:34px;border-radius:50%;border:1px solid var(--ink);display:grid;place-items:center;font-size:15px;font-weight:500;text-align:center}
+.r3-month{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:14px;color:var(--ink2)}
+.r3-month button{width:28px;height:28px;border:1px solid var(--rule);border-radius:50%;color:var(--ink);font-size:15px;text-align:center}
+.r3-month em{font-style:normal;font-size:12px;color:var(--neg)}
+.status{display:flex;align-items:flex-start;gap:8px;margin-top:10px;font-size:13.5px;color:var(--ink2);text-align:left;line-height:1.35}
+.status i{width:7px;height:7px;border-radius:50%;flex:none;margin-top:6px}
+.status.warn{color:var(--ink)}
+.status .go{color:var(--acc);font-weight:500;white-space:nowrap}
+.status-sub{font-size:12.5px;color:var(--ink2);margin:4px 0 0 15px;display:flex;gap:14px}
+.status-sub button{text-decoration:underline;text-underline-offset:3px}
+.r3-main{flex:1;overflow-y:auto;padding:10px 20px 28px}
+.r3-foot{padding:10px 20px 26px;display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--rule)}
+.r3-foot.flat{border-top:0}
+.r3-hero{padding:10px 0 6px}
+.r3-hero .k{font-size:13.5px;color:var(--ink2)}
+.r3-hero .v{font-size:46px;letter-spacing:-.025em;line-height:1.08;margin-top:2px}
+.r3-hero .s{font-size:12.5px;color:var(--ink2);margin-top:4px}
+.r3-sec{margin-top:28px}
+.r3-h{font-size:17px;margin-bottom:6px;font-weight:500}
+.r3-gh{font-size:12px;font-weight:500;color:var(--ink2);margin:26px 0 0;letter-spacing:.06em;text-transform:uppercase}
+.r3-gh:first-child{margin-top:8px}
+.r3-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--rule);width:100%;text-align:left}
+.r3-row.block{display:block}
+.r3-row.block>.line{display:flex;align-items:center;gap:12px}
+.r3-ic{width:38px;height:38px;border-radius:50%;border:1px solid;display:grid;place-items:center;flex:none}
+.r3-ic.sm{width:32px;height:32px}
+.r3-ic.mark{font-size:14px;font-weight:500;color:var(--ink);border-color:var(--ink)}
+.r3-row .t{flex:1;min-width:0}
+.r3-row .d{display:block;font-size:15px}
+.r3-row .s{display:block;font-size:12.5px;color:var(--ink2);margin-top:2px;line-height:1.35}
+.r3-row .s em{font-style:normal;color:var(--acc)}
+.r3-row .r{text-align:right;flex:none}
+.r3-row .r b{display:block;font-weight:500;font-size:16.5px}
+.r3-row .r small{font-size:11px;color:var(--ink2)}
+.r3-row.muted{opacity:.45}
+.r3-row .chev{color:var(--ink2);flex:none;display:grid;transition:transform .15s}
+.r3-row .chev.up{transform:rotate(90deg)}
+.r3-bar{display:block;height:4px;border-radius:2px;background:var(--track);margin-top:9px;overflow:hidden}
+.r3-bar i{display:block;height:100%;border-radius:2px}
+.r3-seg{display:flex;gap:22px;margin:6px 0 14px;font-size:15px;border-bottom:1px solid var(--rule)}
+.r3-seg button,.r3-accs button{padding:8px 0;color:var(--ink2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.r3-seg button.on,.r3-accs button.on{color:var(--ink);border-color:var(--ink);font-weight:500}
+.r3-accs{display:flex;gap:18px;overflow-x:auto;margin:4px 0 6px;font-size:14px;border-bottom:1px solid var(--rule)}
+.r3-accs button{flex:none}
+.r3-day{font-size:13px;font-weight:500;color:var(--ink2);margin:20px 0 0}
+.r3-big{font-size:44px;letter-spacing:-.025em;line-height:1.08;font-weight:500}
+.r3-sub{font-size:14px;color:var(--ink2);margin-top:6px;line-height:1.45}
+.r3-p{font-size:15px;line-height:1.5;margin-top:10px}
+.r3-fine{font-size:12.5px;color:var(--ink2);line-height:1.45;margin-top:10px}
+.center{text-align:center}
+.r3-tabs{display:flex;background:var(--bg);border-top:1px solid var(--rule);padding:10px 4px 20px}
+.r3-tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:var(--ink2);text-align:center;position:relative}
+.r3-tabs button.on{color:var(--ink);font-weight:500}
+.r3-tabs button.on::before{content:'';position:absolute;top:-11px;width:18px;height:2px;border-radius:1px;background:var(--ink)}
+
+/* ---------- new pieces for this round ---------- */
+.aviso{display:flex;gap:12px;padding:12px 0 13px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule);margin:4px 0 8px}
+.aviso .av-ic{flex:none;margin-top:1px}
+.aviso b{font-weight:500;font-size:15px;display:block;line-height:1.3}
+.av-a{display:flex;gap:18px;margin-top:6px;flex-wrap:wrap}
+.aviso.row{border-top:0;margin:0;align-items:center}
+.lnk{color:var(--acc);font-weight:500;font-size:13.5px}
+.lnk.mute{color:var(--ink2);font-weight:400}
+.lnk.neg{color:var(--neg)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-size:15.5px;font-weight:500;text-align:center}
+.btn.sec{background:none;color:var(--ink);border:1px solid var(--rule)}
+.btn.sec.neg{color:var(--neg)}
+.btn.danger{background:var(--neg);color:#fff}
+.btn.sm{padding:9px 14px;font-size:14px;width:auto;border-radius:10px}
+.btns{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.links{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.mt{margin-top:18px}
+.stblock{padding:4px 0 6px}
+.stblock .st{font-size:15px;font-weight:500;display:flex;align-items:center;gap:8px}
+.stblock .st i{width:8px;height:8px;border-radius:50%}
+.stblock p{font-size:14.5px;line-height:1.45;margin-top:6px}
+.fact{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--rule);font-size:14.5px}
+.fact span:first-child{color:var(--ink2);flex:none}
+.fact span:last-child{text-align:right}
+.acc.open>.r3-row{border-bottom:0}
+.acc-body{padding:0 0 16px 44px;border-bottom:1px solid var(--rule)}
+.acc-body p{font-size:14px;line-height:1.45}
+.acc-body .fact{font-size:13.5px;padding:8px 0}
+.cblock{padding:14px 0 16px;border-bottom:1px solid var(--rule)}
+.cblock .line{display:flex;align-items:center;gap:12px}
+.cblock .d{display:block;font-size:15.5px}
+.cblock .s{display:block;font-size:12.5px;margin-top:1px}
+.cblock p{font-size:14px;line-height:1.45;margin-top:8px}
+.fld{display:block;margin-top:20px}
+.fld>span{display:block;font-size:12.5px;color:var(--ink2)}
+.fld input{display:block;width:100%;border:0;border-bottom:1px solid var(--ink2);background:none;padding:8px 0;font-size:16.5px;outline:none;color:var(--ink);font-family:inherit;border-radius:0}
+.fld input:focus{border-bottom:2px solid var(--acc);padding-bottom:7px}
+.fld .fixed{padding:8px 0;font-size:16.5px;border-bottom:1px solid var(--rule);color:var(--ink2)}
+.note{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.4;margin-top:16px}
+.note>span:first-child{flex:none;margin-top:1px}
+.note.neg{color:var(--neg)}
+.errbox{border-left:2px solid var(--neg);padding:4px 0 4px 12px;margin-top:18px;font-size:14px;line-height:1.45}
+.errbox .links{margin-top:6px}
+.welcome{flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 24px}
+.welcome .r3-big{font-size:52px}
+.welcome p{font-size:16.5px;line-height:1.45;color:var(--ink2);margin-top:14px}
+.need{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--rule);font-size:15px;line-height:1.4}
+.need .n{width:26px;height:26px;border-radius:50%;border:1px solid var(--ink);display:grid;place-items:center;font-size:13px;flex:none;font-weight:500}
+.know{display:flex;gap:12px;padding:10px 0;font-size:14.5px;line-height:1.4;align-items:flex-start}
+.know>span:first-child{color:var(--acc);flex:none;margin-top:1px}
+.progress{height:3px;background:var(--track);border-radius:2px;overflow:hidden;margin-top:26px}
+.progress i{display:block;height:100%;width:35%;background:var(--acc);border-radius:2px;animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
+.lockscr{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px}
+.lockscr .r3-big{font-size:36px}
+.diag{font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.55;background:var(--track);border-radius:10px;padding:12px;white-space:pre-wrap;margin-top:8px;color:var(--ink2)}
+.empty{text-align:center;padding:70px 18px;line-height:1.45}
+.empty b{display:block;font-size:20px;font-weight:500;margin-top:16px}
+.empty p{font-size:14px;color:var(--ink2);margin:6px 0 20px}
+.empty .r3-ic{margin:0 auto;width:54px;height:54px;color:var(--ink)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;column-gap:16px;margin-top:4px}
+.grid2 button{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--rule);font-size:14px;text-align:left;line-height:1.25}
+.grid2 button.on{font-weight:500}
+.grid2 button.on::after{content:'';width:7px;height:7px;border-radius:50%;background:var(--acc);margin-left:auto;flex:none}
+.rtog{display:flex;gap:12px;align-items:center;width:100%;text-align:left;font-size:14.5px;line-height:1.35;padding:12px 0;border-bottom:1px solid var(--rule)}
+.rtog .sw{width:38px;height:22px;position:relative;flex:none;background:var(--rule);border-radius:11px;transition:background .15s}
+.rtog .sw::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:left .15s}
+.rtog.on .sw{background:var(--acc)}
+.rtog.on .sw::after{left:19px}
+.rtog small{display:block;color:var(--ink2);font-size:12.5px;margin-top:2px}
+.rtog>span:last-child{flex:1}
+.rtog.dis{cursor:default}.rtog.dis .sw{opacity:.4}
+.rtog.boxed{border-top:1px solid var(--rule);margin-top:12px}
+.rulein{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink2);padding:10px 0 2px}
+.rulein input{flex:1;border:0;border-bottom:1px solid var(--ink2);background:none;color:var(--ink);font:inherit;font-size:15px;padding:4px 0;outline:none}
+.rule-row{display:flex;align-items:center;gap:10px;padding:12px 0;font-size:14.5px;border-bottom:1px solid var(--rule);line-height:1.35}
+.rule-row>span{flex:1}.rule-row small{display:block;color:var(--ink2);font-size:12.5px;margin-top:2px}
+.rule-row button{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--rule);border-radius:50%;flex:none}
+.sheet-bg{position:absolute;inset:0;z-index:40;display:flex;align-items:flex-end;background:rgba(0,0,0,.45)}
+.sheet{width:100%;max-height:90%;overflow:auto;cursor:default;background:var(--bg);border-radius:18px 18px 0 0;border-top:1px solid var(--rule);padding:12px 22px 26px}
+.sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--rule);margin:0 auto 14px}
+.sh-t{font-size:24px;font-weight:500;letter-spacing:-.01em}
+.sh-d{font-size:15px;color:var(--ink2)}
+.sh-v{font-size:34px;letter-spacing:-.02em;margin:2px 0}
+.toast{position:absolute;left:16px;right:16px;bottom:96px;z-index:90;padding:12px 16px;font-size:13.5px;background:var(--ink);color:var(--bg);border-radius:12px;line-height:1.4}
+
+/* ---------- system UI and the Meu Pluggy tab (not our design; generic Android look) ---------- */
+.sys-bg{position:absolute;inset:0;z-index:70;background:rgba(0,0,0,.5);display:flex;align-items:flex-end}
+.sys-sheet{width:100%;background:#F3EDF7;color:#1D1B20;border-radius:28px 28px 0 0;padding:22px 22px 28px;font-family:Roboto,system-ui,sans-serif}
+.sys-sheet.bio{text-align:center}
+.sys-sheet b{font-size:20px;font-weight:500;display:block}
+.sys-sheet p{font-size:14px;color:#49454F;margin-top:6px}
+.sys-tag{display:inline-block;font-size:10px;letter-spacing:.06em;background:#ffcc00;color:#111;padding:2px 6px;border-radius:4px;margin-bottom:10px;font-weight:700;font-family:system-ui,sans-serif}
+.fp{display:grid;place-items:center;margin:20px auto 6px;width:72px;height:72px;border-radius:50%;color:#6750A4;background:#E8DEF8}
+.sys-btns{display:flex;justify-content:space-between;margin-top:18px}
+.sys-btns button{color:#6750A4;font-weight:500;font-size:14px;padding:8px}
+.sys-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px;text-align:center;font-size:12px}
+.sys-grid button{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.sys-grid i{width:48px;height:48px;border-radius:50%;background:#E8DEF8;display:block}
+.sys-file{font-size:14px;padding:4px 0 12px;border-bottom:1px solid #CAC4D0}
+.sys-list button{display:block;width:100%;padding:12px 0;border-bottom:1px solid #CAC4D0;font-size:14.5px;text-align:left}
+.sys-list small{display:block;font-size:12px;color:#49454F}
+.ctab{position:absolute;inset:0;z-index:60;background:#fff;color:#1f1f1f;display:flex;flex-direction:column;font-family:Roboto,system-ui,sans-serif}
+.ct-bar{display:flex;align-items:center;gap:14px;padding:30px 14px 12px;background:#f1f3f4;border-bottom:1px solid #ddd}
+.ct-bar button{font-size:20px;width:32px;height:32px}
+.ct-bar b{display:block;font-size:15px;font-weight:500}
+.ct-bar small{font-size:12px;color:#5f6368}
+.ct-body{flex:1;padding:26px 22px;overflow:auto}
+.ct-body h2{font-size:22px;font-weight:500}
+.ct-body p{font-size:14.5px;color:#444;margin:8px 0 16px;line-height:1.45}
+.ct-opt{display:flex;align-items:center;gap:12px;width:100%;padding:13px 4px;border-bottom:1px solid #eee;font-size:15px;text-align:left}
+.ct-opt i{width:18px;height:18px;border-radius:50%;border:2px solid #888;flex:none}
+.ct-opt.on i{border:6px solid #1f1f1f}
+.ct-go{display:block;width:100%;margin-top:22px;padding:14px;border-radius:10px;background:#1f1f1f;color:#fff;text-align:center;font-size:15px;font-weight:500}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="phone"><div id="app"></div></div>
+  <aside class="notes" id="notes"></aside>
+</div>
+<div class="switcher" role="toolbar" aria-label="Trocar variante do protótipo">
+  <button data-act="variant-prev" aria-label="Variante anterior">←</button>
+  <span class="lbl" id="sw-label"></span>
+  <button data-act="variant-next" aria-label="Próxima variante">→</button>
+  <span class="sep"></span>
+  <button data-act="mode" id="sw-mode" aria-label="Alternar claro e escuro"></button>
+</div>
+
+<script>
+'use strict';
+// ============================================================
+// Formatting, icons
+// ============================================================
+const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const fmt = v => BRL.format(v);
+const signed = v => (v > 0 ? '+' : v < 0 ? '−' : '') + BRL.format(Math.abs(v));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const WDF = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const ICONS = {
+  bus: '<rect x="5" y="3.5" width="14" height="13" rx="3"/><path d="M5 10.5h14M8.5 20v-3.5M15.5 20v-3.5"/><path d="M8.5 13.5h.01M15.5 13.5h.01"/>',
+  food: '<path d="M7 3v7a2 2 0 0 0 2 2v9M11 3v7a2 2 0 0 1-2 2M9 3v5"/><path d="M17 21V3c-2 1.5-3 4-3 7s1 4 3 4"/>',
+  cart: '<path d="M3 4h2.2l2.3 10.3a1.2 1.2 0 0 0 1.2.9h8.6a1.2 1.2 0 0 0 1.2-.9L20.5 8H6.1"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="16.5" cy="19.5" r="1.3"/>',
+  bag: '<path d="M5 8.5h14l-1.2 12H6.2z"/><path d="M9 8.5V7a3 3 0 0 1 6 0v1.5"/>',
+  game: '<path d="M7 8h10a4 4 0 0 1 3.9 4.9l-.8 3.3a2 2 0 0 1-3.5.8L15 15H9l-1.6 2a2 2 0 0 1-3.5-.8l-.8-3.3A4 4 0 0 1 7 8z"/><path d="M8.5 10.5v3M7 12h3M15.5 11h.01M17 13h.01"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>',
+  plane: '<path d="M12 2.8c.9 0 1.4.9 1.4 2.3V9l7.1 4.1v2l-7.1-2.1v4.6l2.2 1.6v1.6L12 19.9l-3.6.9v-1.6l2.2-1.6V13l-7.1 2.1v-2L10.6 9V5.1c0-1.4.5-2.3 1.4-2.3z"/>',
+  tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8.5 21h7M12 17v4"/>',
+  receipt: '<path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z"/><path d="M9 8h6M9 12h6"/>',
+  percent: '<path d="M18 6 6 18"/><circle cx="7.5" cy="7.5" r="2.2"/><circle cx="16.5" cy="16.5" r="2.2"/>',
+  more: '<path d="M6.5 12h.01M12 12h.01M17.5 12h.01"/>',
+  income: '<path d="M12 3.5v10M7.5 9 12 13.5 16.5 9"/><path d="M4 15.5V20h16v-4.5"/>',
+  growth: '<path d="M3.5 17l5.5-5.5 4 3 7.5-7.5"/><path d="M15 7h5.5v5.5"/>',
+  swap: '<path d="M4 8h15l-3.5-3.5M20 16H5l3.5 3.5"/>',
+  card: '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18M7 14.5h4"/>',
+  undo: '<path d="M9 6.5 4.5 11 9 15.5"/><path d="M4.5 11H15a4.5 4.5 0 0 1 0 9h-2"/>',
+  users: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.5 14.6a4.5 4.5 0 0 1 5.5 4.4"/>',
+  t_mes: '<rect x="2.5" y="6" width="19" height="12" rx="1.5"/><circle cx="12" cy="12" r="2.8"/><path d="M6 9.5v5M18 9.5v5"/>',
+  t_gastos: '<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8a8.5 8.5 0 0 1 5.2 5.2H15z"/>',
+  t_tx: '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/>',
+  t_pat: '<path d="M3 9.5 12 4l9 5.5"/><path d="M5.5 10.5v7M10 10.5v7M14 10.5v7M18.5 10.5v7M3 20.5h18"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  chev: '<path d="M9 5l7 7-7 7"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  alert: '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17h.01"/>',
+  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+  finger: '<path d="M12 11v3.5c0 2-.6 3.8-1.6 5.3"/><path d="M8.6 7.6A5 5 0 0 1 17 11v2.5c0 1.6-.2 3.2-.7 4.7"/><path d="M6.4 14.5c.4-1 .6-2.2.6-3.5a5 5 0 0 1 .6-2.4"/><path d="M5 5.5A8.5 8.5 0 0 1 20.5 11v1.5"/><path d="M3.5 9.5A8.4 8.4 0 0 0 3.5 11c0 1.3-.2 2.5-.6 3.6"/><path d="M14.4 21c.3-.8.6-1.7.8-2.5"/>',
+  archive: '<path d="M4.5 8h15v12h-15z"/><path d="M3 4h18v4H3zM10 12h4"/>',
+  contrast: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/>',
+  help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2.2-2.4 3.7M12 17h.01"/>',
+  info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 8h.01"/>',
+  trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16.5 6.5l2.5 2.5M14 9l2 2"/>',
+  sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
+  ext: '<path d="M14 4.5h5.5V10M19.5 4.5l-8 8"/><path d="M17 13.5v5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7h5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  refresh: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3L19.5 9"/><path d="M19.5 4.5V9H15"/>',
+  code: '<path d="M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5"/>',
+  book: '<path d="M4.5 5.5A2 2 0 0 1 6.5 4H19v14H6.5a2 2 0 0 0-2 2z"/><path d="M4.5 20V5.5"/>',
+  shield: '<path d="M12 3.5 5 6v5.5c0 4.3 3 7.6 7 9 4-1.4 7-4.7 7-9V6z"/>',
+  download: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M4.5 19.5h15"/>',
+};
+const icon = (n, { size = 20, sw = 1.5, color = 'currentColor' } = {}) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+
+// ============================================================
+// Invented data
+// ============================================================
+const CATS = {
+  alimentacao: { label: 'Alimentação', icon: 'food' }, mercado: { label: 'Mercado', icon: 'cart' }, transporte: { label: 'Transporte', icon: 'bus' },
+  compras: { label: 'Compras', icon: 'bag' }, lazer: { label: 'Lazer e games', icon: 'game' }, saude: { label: 'Saúde', icon: 'heart' },
+  viagem: { label: 'Viagem', icon: 'plane' }, assinaturas: { label: 'Assinaturas', icon: 'tv' }, contas: { label: 'Contas fixas', icon: 'receipt' },
+  tarifas: { label: 'Tarifas e impostos', icon: 'percent' }, outros: { label: 'Outros', icon: 'more' },
+};
+const GRAY = new Set(['assinaturas', 'contas', 'tarifas', 'outros']);
+const PAL = {
+  light: { transporte: '#2D62B0', alimentacao: '#B8325A', compras: '#B07A0A', saude: '#0E8AA6', viagem: '#C0622B', lazer: '#7650B0', mercado: '#2F8A5F', outros: '#8B9196' },
+  dark: { transporte: '#5B8FE0', alimentacao: '#E0577F', compras: '#B88517', saude: '#1C9AB4', viagem: '#D06E3A', lazer: '#9C7BDB', mercado: '#46A877', outros: '#80878E' },
+};
+const catColor = k => PAL[S.mode][GRAY.has(k) ? 'outros' : k];
+const NAT = { gasto: 'Gasto', receita: 'Receita', reembolso: 'Reembolso', emprestimo: 'Empréstimo pessoal', aporte: 'Aporte', resgate: 'Resgate', propria: 'Transferência própria', fatura: 'Pagamento de fatura' };
+const ORIG = { salario: 'Salário', rendimentos: 'Rendimentos', outras: 'Outras receitas' };
+const BANKS = {
+  btg: { name: 'BTG Pactual', short: 'BTG', mark: 'B', accs: 'Conta, cartão e 28 investimentos' },
+  nubank: { name: 'Nubank', short: 'Nubank', mark: 'N', accs: 'Conta' },
+  mp: { name: 'Mercado Pago', short: 'Mercado Pago', mark: 'M', accs: 'Conta' },
+  itau: { name: 'Itaú Unibanco', short: 'Itaú', mark: 'I', accs: 'Conta e cartão' },
+};
+const ACCS = { 'btg-conta': { name: 'BTG Conta', short: 'BTG', bank: 'btg' }, 'btg-cartao': { name: 'Cartão BTG', short: 'Cartão BTG', bank: 'btg' }, nubank: { name: 'Nubank', short: 'Nubank', bank: 'nubank' }, mp: { name: 'Mercado Pago', short: 'Mercado Pago', bank: 'mp' } };
+const ACC_TAB = { all: 'Todas', 'btg-conta': 'BTG', 'btg-cartao': 'Cartão', nubank: 'Nubank', mp: 'MP' };
+const TX = [
+  { id: 1, d: 8, desc: 'IFOOD *RESTAURANTE', amt: -42.9, acc: 'btg-cartao', nat: 'gasto', cat: 'alimentacao' },
+  { id: 2, d: 8, desc: 'UBER *TRIP', amt: -18.4, acc: 'btg-cartao', nat: 'gasto', cat: 'outros' },
+  { id: 3, d: 7, desc: 'PIX RECEBIDO JOAO S', amt: 150, acc: 'nubank', nat: 'receita', orig: 'outras' },
+  { id: 4, d: 7, desc: 'NETFLIX.COM', amt: -44.9, acc: 'btg-cartao', nat: 'gasto', cat: 'assinaturas' },
+  { id: 5, d: 6, desc: 'SUPERMERCADO BOM PRECO', amt: -186.3, acc: 'btg-cartao', nat: 'gasto', cat: 'mercado' },
+  { id: 6, d: 5, desc: 'SALARIO EMPRESA LTDA', amt: 6800, acc: 'btg-conta', nat: 'receita', orig: 'salario' },
+  { id: 7, d: 5, desc: 'CDB BANCO PACTUAL', amt: -2000, acc: 'btg-conta', nat: 'aporte' },
+  { id: 8, d: 4, desc: 'PAGAMENTO FATURA CARTAO', amt: -3120.55, acc: 'btg-conta', nat: 'fatura' },
+  { id: 9, d: 3, desc: 'TRANSF PARA CONTA NUBANK', amt: -500, acc: 'btg-conta', nat: 'propria' },
+  { id: 10, d: 3, desc: 'DROGARIA SAUDE', amt: -38.2, acc: 'nubank', nat: 'gasto', cat: 'saude' },
+  { id: 11, d: 3, desc: 'TARIFA PACOTE SERVICOS', amt: -19.9, acc: 'mp', nat: 'gasto', cat: 'tarifas' },
+  { id: 12, d: 2, desc: 'ESTORNO AMAZON', amt: 89.9, acc: 'btg-cartao', nat: 'reembolso', cat: 'compras' },
+  { id: 13, d: 1, desc: 'PIX ENVIADO MARIA L', amt: -60, acc: 'mp', nat: 'gasto', cat: 'outros' },
+];
+const BUILTIN = [
+  ['BTG', 'Crédito no cartão com a categoria “Credit card payment”', 'Pagamento de fatura'],
+  ['BTG', 'Compra de CDB, Tesouro ou ação na conta de investimentos', 'Aporte'],
+  ['Todos', 'Contraparte com o seu CPF', 'Transferência própria'],
+  ['Todos', 'Estorno ou cashback no cartão', 'Reembolso'],
+  ['Todos', 'Pagamento com FOLHA_PAGAMENTO ou Income › Salary', 'Receita · Salário'],
+  ['Nubank', '“Resgate RDB” na conta', 'Resgate'],
+  ['Mercado Pago', '“Rendimento” na conta', 'Receita · Rendimentos'],
+];
+const GASTOS = [['alimentacao', 812.4], ['mercado', 640.1], ['transporte', 402.3], ['compras', 388.0], ['saude', 158.2], ['lazer', 96.0], ['outros', 312.6]];
+const DEFAULT_CONN = () => ({ btg: 'vencendo', nubank: 'atrasada', mp: 'ok' });
+
+// ============================================================
+// State (in memory)
+// ============================================================
+const S = {
+  variant: 'A', mode: 'light', tab: 'mes', acc: 'all',
+  stack: [], sheet: null, flow: null, wait: null, ctab: null, sys: null, locked: false, toast: null,
+  conn: DEFAULT_CONN(), order: ['btg', 'nubank', 'mp'], expanded: null,
+  credRefused: false, backupDays: 34, hasPwd: true, pwd: 'senha', snoozed: {},
+  lockOn: true, noScreenLock: false, failDelete: false, estimating: false, theme: 'sistema',
+  taps: 0, channel: 'production', overrides: {}, rules: [{ match: 'UBER', nat: 'gasto', cat: 'transporte' }, { match: 'PIX ENVIADO MARIA', nat: 'emprestimo' }],
+  form: {}, credErr: null, checking: false, rErr: null, rfile: null, wipeFailed: false,
+};
+const V = () => S.variant;
+const VARIANTS = {
+  A: { name: 'Engrenagem', idea: 'Uma engrenagem no topo de toda aba abre Configurações, e as telas se empilham: Configurações › Conexões › um banco. O aviso do Resumo é uma faixa no topo, antes do saldo.' },
+  B: { name: 'Duas portas', idea: 'Conexões ganha porta própria: a linha de estado no topo do Resumo (“3 bancos · hoje, 06:12”) abre a lista, e cada banco se abre ali mesmo. A engrenagem, só no Resumo, leva a Configurações, sem Conexões. O aviso toma o lugar da linha de estado.' },
+  C: { name: 'Página única', idea: 'A sua inicial, no topo de toda aba, abre uma página só com tudo: as Conexões com os botões à vista, depois credenciais, regras, bloqueio, backup, tema, ajuda e sobre. Os fluxos (backup, credenciais, apagar tudo) sobem como folhas. O aviso é uma linha do Resumo, abaixo das três linhas.' },
+};
+const ORDER = ['A', 'B', 'C'];
+const ruleKey = t => t.desc.split(/[*\d]/)[0].trim();
+const matchRule = t => S.rules.find(r => t.desc.toLowerCase().includes(r.match.toLowerCase()));
+function eff(t) {
+  const o = S.overrides[t.id]; if (o) return { ...t, ...o, src: 'manual' };
+  const r = matchRule(t); if (r) return { ...t, nat: r.nat || t.nat, cat: 'cat' in r ? r.cat : t.cat, orig: r.orig || t.orig, src: 'regra' };
+  return { ...t, src: 'pluggy' };
+}
+const countRule = r => TX.filter(t => t.desc.toLowerCase().includes(r.match.toLowerCase())).length;
+const ruleOut = r => [r.nat ? NAT[r.nat] : null, r.cat ? CATS[r.cat].label : null, r.orig ? ORIG[r.orig] : null].filter(Boolean).join(' · ');
+function txView(e) {
+  if (e.nat === 'gasto') { const c = e.cat || 'outros'; return { ic: CATS[c].icon, color: catColor(c), label: CATS[c].label }; }
+  if (e.nat === 'receita') return { ic: 'income', color: 'var(--pos)', label: ORIG[e.orig || 'outras'] };
+  if (e.nat === 'reembolso') return { ic: 'undo', color: 'var(--pos)', label: 'Reembolso' + (e.cat ? ' · ' + CATS[e.cat].label : '') };
+  if (e.nat === 'aporte') return { ic: 'growth', color: 'var(--acc)', label: 'Aporte' };
+  if (e.nat === 'resgate') return { ic: 'income', color: 'var(--acc)', label: 'Resgate' };
+  if (e.nat === 'propria') return { ic: 'swap', color: 'var(--ink2)', label: 'Transferência própria', muted: true };
+  if (e.nat === 'fatura') return { ic: 'card', color: 'var(--ink2)', label: 'Pagamento de fatura', muted: true };
+  return { ic: 'users', color: 'var(--ink2)', label: 'Empréstimo pessoal', muted: true };
+}
+
+// ============================================================
+// Connections and the Resumo warning
+// ============================================================
+const ST = { ok: ['Em dia', 'pos'], vencendo: ['Vence em 12 dias', 'warn'], atrasada: ['Conexão atrasada', 'warn'], reconectar: ['Conexão a reconectar', 'neg'], lendo: ['Lendo…', 'ink2'] };
+function connInfo(id) {
+  const b = BANKS[id], st = S.conn[id], i = { id, b, st, label: ST[st][0], tone: ST[st][1] };
+  if (st === 'ok') Object.assign(i, { line: 'Dados de hoje, 06:12', data: 'hoje, 06:12', exp: 'Vence em 08/11/2027' });
+  if (st === 'vencendo') Object.assign(i, { line: 'Dados de hoje, 06:12 · vence em 20/11', data: 'hoje, 06:12', exp: 'Vence em 20/11/2026', phrase: `A autorização para ler o ${b.short} vence em 20/11. Renovar é fazer login de novo no Meu Pluggy; os dados já lidos não mudam.`, primary: ['Renovar', 'renew'] });
+  if (st === 'atrasada') Object.assign(i, { line: `Sem dados novos desde 03/11 · O Meu Pluggy não atualiza o ${b.short}`, data: '03/11', exp: 'Vence em 05/10/2027', phrase: `Sem dados novos desde 03/11. O Meu Pluggy não atualiza o ${b.short}: em geral, a ligação do banco precisa de um novo login no próprio Meu Pluggy. O app continua tentando.`, primary: ['Abrir o Meu Pluggy', 'meupluggy'], secondary: ['Reconectar', 'renew'], help: true });
+  if (st === 'reconectar') Object.assign(i, { line: 'Sem dados novos desde 01/11 · A conexão venceu', data: '01/11', exp: 'Venceu em 01/11/2026', phrase: `Sem dados novos desde 01/11. A conexão venceu, e só um novo login no Meu Pluggy traz o ${b.short} de volta. Seus dados continuam aqui.`, primary: ['Reconectar', 'renew'], help: true });
+  if (st === 'lendo') Object.assign(i, { line: 'Primeira leitura. Pode levar alguns minutos.', data: '—', exp: 'Vence em 08/11/2027' });
+  return i;
+}
+const hasRenew = i => [i.primary, i.secondary].some(a => a && a[1] === 'renew');
+const dot = tone => `<i style="background:var(--${tone})"></i>`;
+const connActions = i => (i.primary ? `<div class="btns"><button class="btn sm" data-act="${i.primary[1]}" data-arg="${i.id}">${i.primary[0]}</button>${i.secondary ? `<button class="btn sm sec" data-act="${i.secondary[1]}" data-arg="${i.id}">${i.secondary[0]}</button>` : ''}</div>` : '')
+  + (i.help ? `<div class="links"><button class="lnk" data-act="help">Problemas comuns</button><button class="lnk" data-act="diag">Copiar diagnóstico</button></div>` : '');
+const connSummary = () => { const n = S.order.length, bad = S.order.filter(id => S.conn[id] !== 'ok' && S.conn[id] !== 'lendo').length; return n ? `${n} ${n === 1 ? 'banco' : 'bancos'}${bad ? ` · ${bad} ${bad === 1 ? 'pede' : 'pedem'} atenção` : ' · todos em dia'}` : 'Nenhum banco'; };
+function avisos() {
+  const a = [];
+  if (S.credRefused) a.push({ k: 'cred', txt: 'O Pluggy recusou suas credenciais', act: 'Atualizar Client Secret', go: ['leaf', 'cred:fix'], tone: 'neg', always: true });
+  S.order.filter(id => S.conn[id] === 'reconectar').forEach(id => a.push({ k: 'rec-' + id, txt: `A conexão com o ${BANKS[id].short} venceu`, act: 'Reconectar', go: ['renew', id], tone: 'neg' }));
+  S.order.filter(id => S.conn[id] === 'atrasada').forEach(id => a.push({ k: 'atr-' + id, txt: `Sem dados novos do ${BANKS[id].short} desde 03/11`, act: 'Ver', go: ['conn', id], tone: 'warn' }));
+  S.order.filter(id => S.conn[id] === 'vencendo').forEach(id => a.push({ k: 'ven-' + id, txt: `A conexão com o ${BANKS[id].short} vence em 12 dias`, act: 'Renovar', go: ['renew', id], tone: 'warn' }));
+  if (S.order.length && (S.backupDays === null || S.backupDays > 30)) a.push({ k: 'bkp', txt: S.backupDays === null ? 'Você ainda não fez um backup' : `Seu último backup tem ${S.backupDays} dias`, act: 'Fazer backup', go: ['leaf', 'backup'], tone: 'ink2' });
+  return a.filter(x => x.always || !S.snoozed[x.k]);
+}
+const more = av => av.length > 1 ? `<button class="lnk mute" data-act="open-conexoes">e mais ${av.length - 1}</button>` : '';
+const snooze = a => a.always ? '' : `<button class="lnk mute" data-act="av-snooze">Agora não</button>`;
+function avisoA(av) { const a = av[0]; return `<div class="aviso"><span class="av-ic" style="color:var(--${a.tone})">${icon('alert', { size: 20, sw: 1.5 })}</span><div><b>${a.txt}</b><div class="av-a"><button class="lnk" data-act="av-go">${a.act}</button>${snooze(a)}${more(av)}</div></div></div>`; }
+function avisoC(av) { const a = av[0]; return `<div class="aviso row"><span class="r3-ic" style="color:var(--${a.tone})">${icon('alert', { size: 18, sw: 1.4 })}</span><div style="flex:1"><b style="font-size:15px">${a.txt}</b><div class="av-a" style="margin-top:3px"><button class="lnk" data-act="av-go">${a.act}</button>${snooze(a)}${more(av)}</div></div></div>`; }
+function statusB(av) {
+  if (!S.order.length) return '';
+  if (!av.length) { const names = S.order.map(id => BANKS[id].short); return `<button class="status" data-act="open-conexoes">${dot('pos')}<span>${names.length > 1 ? names.slice(0, -1).join(', ') + ' e ' + names.at(-1) : names[0]} · hoje, 06:12 <span class="go">›</span></span></button>`; }
+  const a = av[0];
+  return `<button class="status warn" data-act="av-go">${dot(a.tone === 'ink2' ? 'ink2' : a.tone)}<span>${a.txt} · <span class="go">${a.act}</span></span></button><div class="status-sub">${av.length > 1 ? `<button data-act="open-conexoes">e mais ${av.length - 1}</button>` : `<button data-act="open-conexoes">Conexões</button>`}${a.always ? '' : '<button data-act="av-snooze">Agora não</button>'}</div>`;
+}
+
+// ============================================================
+// Building blocks
+// ============================================================
+const gh = t => `<h3 class="r3-gh">${t}</h3>`;
+const mark = id => `<span class="r3-ic sm mark">${BANKS[id].mark}</span>`;
+const chev = `<span class="chev">${icon('chev', { size: 16 })}</span>`;
+const extI = `<span class="chev">${icon('ext', { size: 15 })}</span>`;
+const row = o => `<button class="r3-row ${o.cls || ''}" ${o.act ? `data-act="${o.act}"` : ''} ${o.arg != null ? `data-arg="${o.arg}"` : ''}>${o.ic ? `<span class="r3-ic sm" style="color:${o.color || 'var(--ink)'}">${icon(o.ic, { size: 16, sw: 1.4 })}</span>` : ''}<span class="t"><span class="d" ${o.danger ? 'style="color:var(--neg)"' : ''}>${o.d}</span>${o.s ? `<span class="s">${o.s}</span>` : ''}</span>${o.r || ''}</button>`;
+const fact = (k, v) => `<div class="fact"><span>${k}</span><span>${v}</span></div>`;
+const fld = (name, label, type = 'text', ph = '') => `<label class="fld"><span>${label}</span><input name="${name}" type="${type}" value="${esc(S.form[name] || '')}" placeholder="${ph}" autocomplete="off" spellcheck="false"></label>`;
+const backBtn = (act = 'back', arg) => `<button class="r3-back" data-act="${act}" ${arg ? `data-arg="${arg}"` : ''}>${icon('back', { size: 18 })}<span>Voltar</span></button>`;
+function page(title, body, o = {}) {
+  return `<header class="r3-head">${o.back === false ? '' : backBtn(o.backAct, o.backArg)}<h1 class="r3-title mid">${title}</h1>${o.sub ? `<p class="r3-sub">${o.sub}</p>` : ''}</header><main class="r3-main" data-scroll="${esc(title)}">${body}</main>${o.foot ? `<div class="r3-foot ${o.flatFoot ? 'flat' : ''}">${o.foot}</div>` : ''}`;
+}
+const backupLine = () => S.backupDays === null ? 'Nenhum backup ainda' : S.backupDays === 0 ? 'Último backup: hoje' : `Último backup: há ${S.backupDays} dias`;
+const lockToggle = () => S.noScreenLock
+  ? `<div class="rtog dis"><span class="sw"></span><span>Bloqueio com biometria<small style="color:var(--warn)">Seu celular não tem bloqueio de tela. Ative-o no Android para usar o bloqueio.</small></span></div>`
+  : `<button class="rtog ${S.lockOn ? 'on' : ''}" data-act="lock-toggle"><span class="sw"></span><span>Bloqueio com biometria<small>Pede a digital ou o PIN do aparelho ao abrir e depois de 1 minuto fora.</small></span></button>`;
+const themeSeg = () => `<div class="r3-seg" style="margin-top:8px">${[['sistema', 'Do sistema'], ['claro', 'Claro'], ['escuro', 'Escuro']].map(([k, l]) => `<button class="${S.theme === k ? 'on' : ''}" data-act="theme" data-arg="${k}">${l}</button>`).join('')}</div>`;
+const connectBtn = () => `<button class="btn sec mt" data-act="connect" ${S.order.length >= 5 ? 'disabled' : ''}>${icon('plus', { size: 16 })} Conectar banco</button><p class="r3-fine center">${S.order.length} de 5 · todos no seu nome</p>`;
+
+// ============================================================
+// Configurações: one content, three structures
+// ============================================================
+function configBody(mode) {
+  let b = '';
+  if (mode === 'row') b += gh('Bancos') + row({ ic: 'link', d: 'Conexões', s: connSummary(), act: 'push', arg: 'conexoes', r: chev });
+  if (mode === 'inline') b += gh(`Conexões · ${S.order.length} de 5`) + connBlocksC() + `<button class="btn sec mt" data-act="connect" ${S.order.length >= 5 ? 'disabled' : ''}>${icon('plus', { size: 16 })} Conectar banco</button>`;
+  b += gh('Pluggy') + row({ ic: 'key', d: 'Credenciais', s: 'Client ID a1b2…3f9a', act: 'leaf', arg: 'cred', r: chev });
+  b += gh('Transações') + row({ ic: 'sliders', d: 'Regras', s: `${S.rules.length} suas · ${BUILTIN.length} do app`, act: 'leaf', arg: 'regras', r: chev });
+  b += gh('Segurança') + lockToggle();
+  b += gh('Backup') + row({ ic: 'archive', d: 'Fazer backup', s: backupLine(), act: 'leaf', arg: 'backup', r: chev }) + row({ ic: 'key', d: 'Criar nova senha', s: 'Vale para os próximos backups', act: 'leaf', arg: 'backup:new', r: chev });
+  b += gh('Aparência') + themeSeg();
+  b += gh('Ajuda') + row({ ic: 'book', d: 'Guia do app', s: 'Abre no navegador', act: 'ext', arg: 'guia', r: extI }) + row({ ic: 'help', d: 'Problemas comuns', act: 'help', r: extI }) + row({ ic: 'copy', d: 'Copiar diagnóstico', s: 'Para mandar a quem te ajuda. Vai sem valores nem nomes.', act: 'diag' });
+  b += gh('Sobre') + row({ ic: 'info', d: 'Versão 1.0.0', s: `Atualização de 08/11/2026${S.channel === 'preview' ? ' · canal preview' : ''}`, act: 'ver-tap' }) + row({ ic: 'book', d: 'Créditos', s: 'Fontes de dados e licenças', act: 'leaf', arg: 'creditos', r: chev }) + row({ ic: 'code', d: 'Código aberto', s: 'Licença MIT', act: 'ext', arg: 'gh', r: extI });
+  b += `<div style="margin-top:26px">${row({ ic: 'trash', color: 'var(--neg)', d: 'Apagar tudo', s: 'Os dados deste celular e as autorizações no Meu Pluggy', act: 'leaf', arg: 'apagar', danger: true })}</div>`;
+  return b;
+}
+function connBlocksC() {
+  return S.order.map(id => { const i = connInfo(id); return `<div class="cblock"><div class="line">${mark(id)}<span class="t" style="flex:1"><span class="d">${i.b.name}</span><span class="s" style="color:var(--${i.tone})">${i.label}</span></span></div><p>${i.phrase || i.line}</p>${connActions(i)}<div class="links"><span class="r3-fine" style="margin:0">${i.exp}</span>${hasRenew(i) ? '' : `<button class="lnk" data-act="renew" data-arg="${id}">Renovar</button>`}<button class="lnk neg" data-act="remove" data-arg="${id}">Remover</button></div></div>`; }).join('');
+}
+function conexoesA() {
+  const b = S.order.map(id => { const i = connInfo(id); return `<button class="r3-row" data-act="push" data-arg="conexao:${id}">${mark(id)}<span class="t"><span class="d">${i.b.name}</span><span class="s" style="color:var(--${i.tone})">${i.label}</span><span class="s">${i.line}</span></span>${chev}</button>`; }).join('') + connectBtn();
+  return page('Conexões', b, { sub: 'Cada banco é uma autorização no seu Meu Pluggy.' });
+}
+function conexaoA(id) {
+  if (!S.order.includes(id)) { S.stack.pop(); return stackScreen(); }
+  const i = connInfo(id);
+  let b = `<div class="stblock"><div class="st" style="color:var(--${i.tone})">${dot(i.tone)}${i.label}</div>${i.phrase ? `<p>${i.phrase}</p>` : `<p>${i.line}</p>`}${connActions(i)}</div>`;
+  b += gh('Dados') + fact('Dados de', i.data) + fact('O que vem', i.b.accs) + fact('Autorização', i.exp);
+  b += `<div class="btns" style="flex-direction:column;margin-top:22px">${hasRenew(i) ? '' : `<button class="btn sec" data-act="renew" data-arg="${id}">Renovar</button>`}<button class="btn sec neg" data-act="remove" data-arg="${id}">Remover</button></div><p class="r3-fine">Renovar abre o Meu Pluggy para um novo login e dá mais 1 ano. Os dados já lidos não mudam.</p>`;
+  return page(i.b.name, b);
+}
+function conexoesB() {
+  const b = S.order.map(id => {
+    const i = connInfo(id), open = S.expanded === id;
+    return `<div class="acc ${open ? 'open' : ''}"><button class="r3-row" data-act="expand" data-arg="${id}">${mark(id)}<span class="t"><span class="d">${i.b.name}</span><span class="s" style="color:var(--${i.tone})">${i.label}</span>${open ? '' : `<span class="s">${i.line}</span>`}</span><span class="chev ${open ? 'up' : ''}">${icon('chev', { size: 16 })}</span></button>${open ? `<div class="acc-body"><p>${i.phrase || i.line}</p>${connActions(i)}<div style="margin-top:12px">${fact('Dados de', i.data)}${fact('O que vem', i.b.accs)}${fact('Autorização', i.exp)}</div><div class="links">${hasRenew(i) ? '' : `<button class="lnk" data-act="renew" data-arg="${id}">Renovar</button>`}<button class="lnk neg" data-act="remove" data-arg="${id}">Remover</button></div></div>` : ''}</div>`;
+  }).join('') + connectBtn();
+  return page('Conexões', b, { sub: 'Toque num banco para ver o que fazer.' });
+}
+
+// ============================================================
+// Leaf screens (shared proposal). In A and B they push; in C they open as sheets.
+// ============================================================
+const credNotes = () => `<div class="note"><span style="color:var(--neg)">${icon('shield', { size: 18, sw: 1.4 })}</span><span>Nunca envie o Client Secret para ninguém. Quem tem ele lê todos os seus dados financeiros.</span></div><p class="r3-fine">Perdeu o celular? Gere um novo Client Secret no Dashboard da Pluggy.</p>`;
+const credErrBox = () => S.credErr ? `<div class="errbox">${S.credErr}<div class="links"><button class="lnk" data-act="help">Problemas comuns</button><button class="lnk" data-act="diag">Copiar diagnóstico</button></div></div>` : '';
+const LEAF = {
+  cred: arg => {
+    const fix = arg === 'fix';
+    return { title: fix ? 'Atualizar Client Secret' : 'Credenciais', sub: fix ? 'O Pluggy recusou suas credenciais. Gere um novo Client Secret no Dashboard da Pluggy e cole aqui.' : 'Da sua aplicação no Dashboard da Pluggy.',
+      body: `<div class="fld"><span>Client ID</span><div class="fixed num">a1b2c3d4-…-3f9a</div></div>${fld('sec', fix ? 'Client Secret novo' : 'Client Secret', 'password', 'Cole aqui')}${credNotes()}${credErrBox()}<button class="btn mt" data-act="cred-submit" data-arg="${fix ? 'fix' : 'edit'}" ${S.checking ? 'disabled' : ''}>${S.checking ? 'Conferindo com o Pluggy…' : 'Salvar'}</button>${fix ? '' : `<p class="r3-fine">Usar outra aplicação é começar de novo: as Conexões e os dados baixados saem; as regras e as edições à mão ficam. <button class="lnk" data-act="toast" data-arg="Trocar de aplicação: confirma e volta para a tela de Credenciais da entrada">Trocar de aplicação</button></p>`}` };
+  },
+  regras: () => ({ title: 'Regras', sub: 'Dão uma natureza e/ou uma categoria às transações cuja descrição contém um texto.',
+    body: gh('Suas regras') + (S.rules.length ? S.rules.map((r, i) => `<div class="rule-row"><span>Descrição com “${esc(r.match)}” vira ${ruleOut(r)}<small>${countRule(r)} ${countRule(r) === 1 ? 'transação' : 'transações'}</small></span><button data-act="rule-del" data-arg="${i}" aria-label="Apagar regra">${icon('x', { size: 14 })}</button></div>`).join('') : `<p class="r3-fine">Nenhuma regra ainda.</p>`)
+      + `<p class="r3-fine">Crie uma ao editar uma transação, com “Aplicar às parecidas”. Vale para as passadas e as próximas, menos as editadas à mão. Se duas pegarem a mesma transação, vale a mais recente.</p>`
+      + gh('Regras do app') + BUILTIN.map(([bank, when, to]) => `<div class="rule-row"><span>${when} vira ${to}<small>${bank}</small></span></div>`).join('')
+      + `<p class="r3-fine">Cobrem o jeito de cada banco marcar as coisas e chegam com as atualizações. Não dá para editá-las: uma regra sua com o mesmo texto passa na frente.</p>` }),
+  backup: arg => {
+    const creating = !S.hasPwd || arg === 'new';
+    if (creating) return { title: arg === 'new' ? 'Nova senha do backup' : 'Primeiro backup', sub: 'O backup sai cifrado, e só abre com esta senha.',
+      body: `${fld('pw1', 'Senha do backup', 'password')}${fld('pw2', 'Digite de novo', 'password')}<div class="note neg"><span>${icon('alert', { size: 18, sw: 1.4 })}</span><span>Esta senha não pode ser recuperada. Sem ela, o backup não abre, nem para você.</span></div>${arg === 'new' ? '<p class="r3-fine">Vale para os próximos backups. Os antigos continuam abrindo com a senha antiga.</p>' : ''}${S.form.bkErr ? `<div class="errbox">${S.form.bkErr}</div>` : ''}<button class="btn mt" data-act="backup-go" data-arg="new">Criar senha e fazer backup</button>` };
+    return { title: 'Fazer backup', sub: backupLine(),
+      body: `<p class="r3-p">O backup leva tudo o que está no app: Conexões, transações, retratos, regras e edições. Você escolhe onde guardar o arquivo, de preferência fora deste celular.</p>${fld('pw', 'Senha do backup', 'password')}${S.form.bkErr ? `<div class="errbox">${S.form.bkErr}</div>` : ''}<button class="btn mt" data-act="backup-go">Fazer backup</button><p class="r3-fine center"><button class="lnk" data-act="leaf-replace" data-arg="backup:new">Esqueci a senha</button></p><p class="r3-fine">Senha da demonstração: “senha”.</p>` };
+  },
+  creditos: () => ({ title: 'Créditos', sub: 'Dados públicos usados para estimar o histórico do patrimônio, sob a licença ODbL.',
+    body: [['Banco Central do Brasil', 'Séries do CDI e do IPCA (SGS)'], ['Tesouro Nacional', 'Preços do Tesouro Direto (Tesouro Transparente)'], ['CVM', 'Informe diário dos fundos (Dados Abertos CVM)']].map(([a, b]) => row({ d: a, s: b, act: 'ext', arg: 'fonte', r: extI })).join('')
+      + gh('Também') + row({ d: 'Pluggy', s: 'Open Finance pelo seu Meu Pluggy' }) + row({ d: 'Jost', s: 'Fonte sob a SIL Open Font License' }) + row({ d: 'Finanças', s: 'Código aberto sob a licença MIT', act: 'ext', arg: 'gh', r: extI }) }),
+  apagar: () => {
+    const n = S.order.length;
+    return { title: 'Apagar tudo', sub: 'Isto não tem volta.',
+      body: `<p class="r3-p">Some deste celular:</p>${[`${n} ${n === 1 ? 'Conexão' : 'Conexões'}${n ? ` (${S.order.map(id => BANKS[id].short).join(', ')})` : ''}, também no Meu Pluggy`, 'Todas as transações, faturas e retratos', `${S.rules.length} regras e ${Object.keys(S.overrides).length} edições à mão`, 'As credenciais da sua aplicação'].map(t => `<div class="know"><span style="color:var(--neg)">${icon('x', { size: 16 })}</span><span>${t}</span></div>`).join('')}<p class="r3-fine">Seus Backups ficam onde você os guardou. A aplicação no Dashboard da Pluggy também fica; apague-a lá, se quiser.</p><button class="btn danger mt" data-act="apagar-go">Apagar tudo</button>` };
+  },
+};
+function openLeaf(spec) { const [id, arg] = spec.split(':'); S.form.bkErr = null; S.credErr = null; if (V() === 'C') S.sheet = { leaf: id, arg }; else S.stack.push({ id: 'leaf', leaf: id, arg }); }
+function closeLeaf() { if (S.sheet && S.sheet.leaf) S.sheet = null; else if (S.stack.length && S.stack.at(-1).id === 'leaf') S.stack.pop(); }
+
+// ============================================================
+// Screens
+// ============================================================
+function stackScreen() {
+  const top = S.stack.at(-1); if (!top) return tabsScreen();
+  if (top.id === 'config') return page('Configurações', configBody(V() === 'A' ? 'row' : V() === 'C' ? 'inline' : 'none'));
+  if (top.id === 'conexoes') return V() === 'B' ? conexoesB() : conexoesA();
+  if (top.id === 'conexao') return conexaoA(top.arg);
+  if (top.id === 'leaf') { const L = LEAF[top.leaf](top.arg); return page(L.title, L.body, { sub: L.sub }); }
+  if (top.id === 'erro') return errorScreen();
+  return tabsScreen();
+}
+function tabsScreen() {
+  const title = { mes: 'Resumo', gastos: 'Gastos', tx: 'Transações', pat: 'Patrimônio' }[S.tab], av = avisos(), empty = !S.order.length;
+  const gear = `<button class="hbtn" data-act="open-config" aria-label="Configurações">${icon('gear', { size: 22, sw: 1.4 })}</button>`;
+  let acts = '';
+  if (S.tab === 'tx' && !empty) acts += `<button class="r3-link" data-act="leaf" data-arg="regras">Regras</button>`;
+  if (V() === 'A' || (V() === 'B' && S.tab === 'mes')) acts += gear;
+  if (V() === 'C') acts += `<button class="avatar" data-act="open-config" aria-label="Suas configurações">K</button>`;
+  const month = ['mes', 'gastos', 'tx'].includes(S.tab) ? `<div class="r3-month"><button disabled aria-label="Mês anterior">‹</button><span>Novembro de 2026</span><em>em andamento</em><button disabled aria-label="Próximo mês">›</button></div>` : '';
+  const head = `<header class="r3-head"><div class="r3-top"><h1 class="r3-title">${title}</h1><div class="acts">${acts}</div></div>${month}${V() === 'B' && S.tab === 'mes' ? statusB(av) : ''}</header>`;
+  let b = '';
+  const ic = (name, color, sm) => `<span class="r3-ic ${sm ? 'sm' : ''}" style="color:${color}">${icon(name, { size: sm ? 16 : 18, sw: 1.4 })}</span>`;
+  if (empty) b = `<div class="empty"><span class="r3-ic">${icon('link', { size: 24, sw: 1.4 })}</span><b>Conecte um banco</b><p>Seus dados aparecem aqui depois da primeira leitura.</p><button class="btn" data-act="connect">Conectar banco</button></div>`;
+  else if (S.tab === 'mes') {
+    if (V() === 'A' && av.length) b += avisoA(av);
+    b += `<div class="r3-hero"><div class="k">Saldo de novembro</div><div class="v num">${signed(2312.4)}</div><div class="s">Até 8 de novembro</div></div>`;
+    b += `<div style="margin-top:8px">${[['Receitas', 6950, 'income', 'var(--pos)'], ['Gastos', 4637.6, 't_gastos', 'var(--neg)'], ['Aportes', 2000, 'growth', 'var(--acc)']].map(([k, v, i, c]) => `<div class="r3-row">${ic(i, c)}<span class="t"><span class="d">${k}</span></span><span class="r"><b class="num">${fmt(v)}</b></span></div>`).join('')}</div>`;
+    if (V() === 'C' && av.length) b += avisoC(av);
+    b += `<section class="r3-sec"><h2 class="r3-h">Onde mais gastou</h2>${GASTOS.slice(0, 3).map(([k, v]) => `<div class="r3-row">${ic(CATS[k].icon, catColor(k))}<span class="t"><span class="d">${CATS[k].label}</span></span><span class="r"><b class="num">${fmt(v)}</b></span></div>`).join('')}</section>`;
+    if (V() !== 'B') b += `<p class="r3-fine center" style="margin-top:18px">Atualizado hoje às 06:12 pelo Pluggy</p>`;
+  } else if (S.tab === 'gastos') {
+    const top = GASTOS[0][1];
+    b += `<div class="r3-seg"><button class="on">Por categoria</button><button>Por semana</button></div>` + GASTOS.map(([k, v]) => `<div class="r3-row block"><span class="line">${ic(CATS[k].icon, catColor(k), true)}<span class="t"><span class="d">${CATS[k].label}</span></span><span class="r"><b class="num">${fmt(v)}</b></span></span><span class="r3-bar"><i style="width:${v / top * 100}%;background:${catColor(k)}"></i></span></div>`).join('');
+  } else if (S.tab === 'tx') {
+    b += `<nav class="r3-accs">${Object.entries(ACC_TAB).map(([k, l]) => `<button class="${S.acc === k ? 'on' : ''}" data-act="acc" data-arg="${k}">${l}</button>`).join('')}</nav>`;
+    if (S.acc !== 'all') { const st = S.conn[ACCS[S.acc].bank]; if (st === 'atrasada' || st === 'reconectar') b += `<p class="status" style="margin-top:12px">${dot(ST[st][1])}<span>Dados de ${st === 'atrasada' ? '03/11' : '01/11'}</span></p>`; }
+    let day = null;
+    TX.filter(t => S.order.includes(ACCS[t.acc].bank) && (S.acc === 'all' || t.acc === S.acc)).forEach(t => {
+      const e = eff(t), v = txView(e);
+      if (t.d !== day) { day = t.d; const dt = new Date(2026, 10, t.d); b += `<div class="r3-day">${WDF[dt.getDay()]}, ${t.d} de novembro</div>`; }
+      b += `<button class="r3-row ${v.muted ? 'muted' : ''}" data-act="tx-open" data-arg="${t.id}">${ic(v.ic, v.color)}<span class="t"><span class="d">${esc(t.desc)}</span><span class="s">${v.label}${e.src !== 'pluggy' ? `, <em>${e.src === 'regra' ? 'por regra' : 'mudada por você'}</em>` : ''}</span></span><span class="r"><b class="num" style="${t.amt > 0 ? 'color:var(--pos)' : ''}">${signed(t.amt)}</b><small>${ACCS[t.acc].short}</small></span></button>`;
+    });
+  } else if (S.tab === 'pat') {
+    b += `<div class="r3-hero"><div class="k">Patrimônio hoje</div><div class="v num">${fmt(84312.7)}</div><div class="s" style="color:var(--pos)">${signed(1904.1)} desde o fim de outubro</div></div>`;
+    if (S.estimating) b += `<p class="status">${dot('ink2')}<span>Estimando o histórico do BTG…</span></p>`;
+    b += `<section class="r3-sec"><h2 class="r3-h">Por classe</h2>${[['Renda fixa', 52140.2, 'transporte'], ['Caixa', 4271.3, 'mercado'], ['Renda variável', 19860, 'compras'], ['Fundos', 8041.2, 'lazer']].map(([n, v, c]) => `<div class="r3-row"><span class="r3-ic sm" style="color:${catColor(c)}"><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg></span><span class="t"><span class="d">${n}</span></span><span class="r"><b class="num">${fmt(v)}</b></span></div>`).join('')}</section>`;
+  }
+  const tabs = `<nav class="r3-tabs">${[['mes', 'Resumo'], ['gastos', 'Gastos'], ['tx', 'Transações'], ['pat', 'Patrimônio']].map(([k, l]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}">${icon('t_' + k, { size: 22, sw: S.tab === k ? 1.7 : 1.3 })}${l}</button>`).join('')}</nav>`;
+  return `${head}<main class="r3-main" data-scroll="tab-${S.tab}">${b}</main>${tabs}`;
+}
+function errorScreen() {
+  return page('Algo deu errado', `<p class="r3-p">Esta tela não abriu. Seus dados estão salvos.</p><button class="btn mt" data-act="diag">${icon('copy', { size: 16 })} Copiar diagnóstico</button><button class="btn sec" style="margin-top:10px" data-act="err-back">Voltar ao Resumo</button>${gh('O que vai no diagnóstico')}<div class="diag">Finanças 1.0.0 · atualização 2026-11-08 (production)\nAndroid 15 · API 35\nTypeError: Cannot read properties of undefined (reading 'balance')\n  at netWorthOf (patrimonio.ts:142)\n  at PatrimonioScreen (PatrimonioScreen.tsx:37)</div><p class="r3-fine">Vai sem valores, descrições nem nomes. Mande para quem te ajuda, pelo WhatsApp.</p>`, { back: false });
+}
+function waitScreen() {
+  const w = S.wait, b = BANKS[w.pick];
+  if (w.phase === 'espera') return page('Esperando o Meu Pluggy', `<p class="r3-p">Confirmando a autorização ${b ? `do ${b.short}` : ''}…</p><div class="progress"><i></i></div>`, { back: false, foot: `<button class="btn sec" data-act="wait-cancel">Cancelar</button>`, flatFoot: true });
+  return page('O login não terminou', `<p class="r3-p">O Meu Pluggy fechou antes de confirmar. O link do login vale por 4 minutos; se passou disso, é só tentar de novo.</p><div class="links"><button class="lnk" data-act="help">Problemas comuns</button><button class="lnk" data-act="diag">Copiar diagnóstico</button></div>`, { back: false, foot: `<button class="btn" data-act="wait-retry">Tentar de novo</button><button class="btn sec" data-act="wait-cancel">Agora não</button>`, flatFoot: true });
+}
+function lockScreen() {
+  return `<div class="lockscr"><span class="r3-ic" style="width:64px;height:64px">${icon('lock', { size: 28, sw: 1.4 })}</span><h1 class="r3-big ttl">Finanças</h1><p class="r3-sub">Atualizando seus dados por trás…</p><button class="btn" style="width:auto;margin-top:18px;padding:12px 28px" data-act="unlock">Desbloquear</button></div>`;
+}
+function flowScreen() {
+  const f = S.flow;
+  if (f === 'welcome') return `<div class="welcome"><h1 class="r3-big">Finanças</h1><p>Suas contas, cartões e investimentos num lugar só, lidos pelo seu Meu Pluggy. Os dados ficam só neste celular.</p></div><div class="r3-foot flat"><button class="btn" data-act="flow" data-arg="antes">Começar</button><button class="btn sec" data-act="restore">Restaurar backup</button></div>`;
+  if (f === 'antes') return page('Antes de começar', `<p class="r3-p" style="margin-top:0">Você vai precisar de:</p><div class="need"><span class="n">1</span><span>Uma conta no Meu Pluggy, com os seus bancos conectados.</span></div><div class="need"><span class="n">2</span><span>Uma aplicação no Dashboard da Pluggy, com as credenciais dela.</span></div>${gh('Bom saber')}${[['lock', 'Os dados ficam só neste celular, e ninguém mais os vê.'], ['refresh', 'O app atualiza 1 vez por dia. Um gasto pode levar uns 2 dias para aparecer.'], ['link', 'Até 5 bancos, todos no seu nome.'], ['archive', 'Sem Backup, perder o celular é perder o histórico.']].map(([i, t]) => `<div class="know"><span>${icon(i, { size: 18, sw: 1.4 })}</span><span>${t}</span></div>`).join('')}`, { backAct: 'flow', backArg: 'welcome', foot: `<button class="btn" data-act="flow" data-arg="cred">Já tenho</button><button class="btn sec" data-act="ext" data-arg="guia">Ver o guia</button>` });
+  if (f === 'cred') return page('Credenciais', `${fld('cid', 'Client ID', 'text', 'Cole aqui')}${fld('sec', 'Client Secret', 'password', 'Cole aqui')}<p class="r3-fine"><button class="lnk" data-act="ext" data-arg="guia">Onde encontro isso?</button></p>${credNotes()}${credErrBox()}<p class="r3-fine">Demonstração: um secret com “errado” é recusado.</p>`, { backAct: 'flow', backArg: 'antes', sub: 'Copie do Dashboard da Pluggy, na sua aplicação.', foot: `<button class="btn" data-act="cred-submit" data-arg="onb" ${S.checking ? 'disabled' : ''}>${S.checking ? 'Conferindo com o Pluggy…' : 'Continuar'}</button>` });
+  if (f === 'pretab') return page('Conectar um banco', `<p class="r3-p" style="margin-top:0">Vai abrir o Meu Pluggy. Escolha um banco; os outros você conecta depois, um de cada vez.</p><div class="note"><span style="color:var(--acc)">${icon('lock', { size: 18, sw: 1.4 })}</span><span>O login é no site do Meu Pluggy. O app não vê a sua senha.</span></div>`, { back: false, foot: `<button class="btn" data-act="connect">Abrir o Meu Pluggy</button><button class="btn sec" data-act="flow" data-arg="entrada">Depois</button>` });
+  if (f === 'entrada') return page('Conexões', (S.order.length ? S.order.map(id => { const i = connInfo(id); return `<div class="r3-row">${mark(id)}<span class="t"><span class="d">${i.b.name}</span><span class="s" style="color:var(--${i.tone})">${i.label}</span><span class="s">${i.line}</span></span></div>`; }).join('') : `<p class="r3-p" style="margin-top:0">Nenhum banco ainda.</p>`) + `<p class="r3-fine">A primeira leitura pode levar alguns minutos. Você já pode ver seus dados enquanto ela termina.</p>`, { back: false, sub: `${S.order.length} de 5 bancos`, foot: `<button class="btn ${S.order.length ? 'sec' : ''}" data-act="connect">${S.order.length ? 'Conectar outro banco' : 'Conectar banco'}</button>${S.order.length ? `<button class="btn" data-act="entrada-done">Ver meus dados</button>` : `<button class="btn sec" data-act="entrada-done">Ver o app vazio</button>`}` });
+  if (f === 'rpwd') {
+    const v2 = S.rfile === 'v2', err = S.rErr === 'versao' ? 'Este backup é de uma versão mais nova do app. Atualize o app para restaurar este backup.' : S.rErr === 'senha' ? 'Senha errada. Ela não pode ser recuperada: sem ela, este backup não abre.' : null;
+    return page('Restaurar backup', `<div class="fact"><span>Arquivo</span><span>financas-backup-${v2 ? '2026-11-01' : '2026-10-06'}.financas</span></div>${S.rErr === 'versao' ? '' : fld('rpw', 'Senha do backup', 'password')}${err ? `<div class="errbox">${err}</div>` : ''}<p class="r3-fine">Demonstração: “errada” é a senha errada.</p>`, { backAct: 'flow', backArg: 'welcome', foot: S.rErr === 'versao' ? `<button class="btn sec" data-act="restore">Escolher outro arquivo</button>` : `<button class="btn" data-act="r-submit">Restaurar</button>` });
+  }
+  if (f === 'rsecret') return page('Falta o Client Secret', `<p class="r3-p" style="margin-top:0">O backup trouxe tudo, menos o Client Secret, que nunca sai do celular. Copie-o do Dashboard da Pluggy ou gere um novo.</p><div class="fld"><span>Client ID (do backup)</span><div class="fixed num">a1b2c3d4-…-3f9a</div></div>${fld('sec', 'Client Secret', 'password', 'Cole aqui')}${credNotes()}${credErrBox()}`, { back: false, foot: `<button class="btn" data-act="cred-submit" data-arg="restore" ${S.checking ? 'disabled' : ''}>${S.checking ? 'Conferindo com o Pluggy…' : 'Continuar'}</button>` });
+  if (f === 'semchave') return page('Não deu para abrir seus dados', `<p class="r3-p" style="margin-top:0">A chave que protege os dados neste celular não está mais lá. Isso pode acontecer depois de mudar o bloqueio de tela ou de restaurar o Android.</p><p class="r3-p">Sem a chave, os dados não abrem. Com um Backup, dá para trazer tudo de volta.</p>`, { back: false, foot: `<button class="btn" data-act="restore">Restaurar backup</button><button class="btn sec" data-act="semchave-new">Começar do zero</button>` });
+  if (f === 'wiped') return page(S.wipeFailed ? 'Quase tudo apagado' : 'Tudo apagado', S.wipeFailed ? `<p class="r3-p" style="margin-top:0">Apagamos tudo deste celular, mas o Meu Pluggy não respondeu. As autorizações continuam lá: remova-as no Meu Pluggy.</p><div class="links"><button class="lnk" data-act="meupluggy">Abrir o Meu Pluggy</button><button class="lnk" data-act="diag">Copiar diagnóstico</button></div>` : `<p class="r3-p" style="margin-top:0">Os dados deste celular e as autorizações no Meu Pluggy foram apagados.</p>`, { back: false, foot: `<button class="btn" data-act="flow" data-arg="welcome">Entendi</button>` });
+  return '';
+}
+
+// ============================================================
+// Sheets and overlays
+// ============================================================
+function editSheet() {
+  const E = S.sheet.edit, t = TX.find(x => x.id === E.id), e = eff(t), key = S.form.rulekey != null ? S.form.rulekey : ruleKey(t);
+  const src = e.src === 'manual' ? 'Você mudou esta transação.' : e.src === 'regra' ? 'Definida por uma regra sua.' : 'Como veio do Pluggy.';
+  const out = [NAT[E.nat], (E.nat === 'gasto' || E.nat === 'reembolso') && E.cat ? CATS[E.cat].label : null, E.nat === 'receita' ? ORIG[E.orig || 'outras'] : null].filter(Boolean).join(' · ');
+  const dt = new Date(2026, 10, t.d);
+  let b = `<div class="sh-d">${esc(t.desc)}</div><div class="sh-v num" style="${t.amt > 0 ? 'color:var(--pos)' : ''}">${signed(t.amt)}</div><p class="r3-sub" style="margin-top:0">${WDF[dt.getDay()]}, ${t.d} de novembro · ${ACCS[t.acc].name}</p><p class="r3-fine">${src}</p>`;
+  b += gh('Natureza') + `<div class="grid2">${Object.entries(NAT).map(([k, l]) => `<button class="${E.nat === k ? 'on' : ''}" data-act="ed-nat" data-arg="${k}">${l}</button>`).join('')}</div>`;
+  if (E.nat === 'gasto' || E.nat === 'reembolso') b += gh(E.nat === 'reembolso' ? 'Categoria (opcional)' : 'Categoria') + `<div class="grid2">${E.nat === 'reembolso' ? `<button class="${!E.cat ? 'on' : ''}" data-act="ed-cat" data-arg="none">Sem categoria</button>` : ''}${Object.entries(CATS).map(([k, c]) => `<button class="${E.cat === k ? 'on' : ''}" data-act="ed-cat" data-arg="${k}"><span style="color:${catColor(k)};display:grid">${icon(c.icon, { size: 18, sw: 1.4 })}</span>${c.label}</button>`).join('')}</div>`;
+  if (E.nat === 'receita') b += gh('Origem') + `<div class="grid2">${Object.entries(ORIG).map(([k, l]) => `<button class="${(E.orig || 'outras') === k ? 'on' : ''}" data-act="ed-orig" data-arg="${k}">${l}</button>`).join('')}</div>`;
+  b += `<button class="rtog boxed ${E.rule ? 'on' : ''}" data-act="ed-rule"><span class="sw"></span><span>Aplicar às parecidas<small>Cria uma regra: descrição com o texto abaixo vira ${out}. Vale para as passadas e as próximas, menos as editadas à mão.</small></span></button>`;
+  if (E.rule) b += `<label class="rulein">Contém <input name="rulekey" value="${esc(key)}"></label><p class="r3-fine" style="margin-top:4px">${(n => `Pega ${n} ${n === 1 ? "transação" : "transações"} dos últimos 12 meses.`)(TX.filter(x => x.desc.toLowerCase().includes(String(key).toLowerCase())).length)}</p>`;
+  b += `<button class="btn mt" data-act="ed-save">Salvar</button>`;
+  return b;
+}
+function sheetHTML() {
+  const sh = S.sheet; let body = '';
+  if (sh.leaf) { const L = LEAF[sh.leaf](sh.arg); body = `<h2 class="sh-t">${L.title}</h2>${L.sub ? `<p class="r3-sub">${L.sub}</p>` : ''}${L.body}`; }
+  if (sh.edit) body = editSheet();
+  if (sh.remove) { const b = BANKS[sh.remove]; body = `<h2 class="sh-t">Remover o ${b.short}?</h2><p class="r3-p">Apaga a autorização no Meu Pluggy e, deste celular, as contas, as transações e as faturas do ${b.short}. As regras ficam.</p><button class="btn danger mt" data-act="remove-ok" data-arg="${sh.remove}">Remover</button><button class="btn sec" style="margin-top:10px" data-act="sheet-close">Cancelar</button>`; }
+  if (sh.fundos) body = `<h2 class="sh-t">Baixar o histórico dos fundos?</h2><p class="r3-p">Para estimar os 12 meses antes de o BTG entrar no app, é preciso baixar uns 135 MB de dados públicos da CVM. Você está no 4G.</p><button class="btn mt" data-act="fundos-ok">${icon('download', { size: 16 })} Baixar agora</button><button class="btn sec" style="margin-top:10px" data-act="fundos-wait">Esperar o Wi-Fi</button><p class="r3-fine center">No Wi-Fi, o app baixa sozinho.</p>`;
+  return `<div class="sheet-bg" data-act="sheet-close"><div class="sheet" data-act="noop"><div class="grab"></div>${body}</div></div>`;
+}
+function ctabHTML() {
+  const c = S.ctab, opts = c.mode === 'renew' ? [c.bank] : ['btg', 'nubank', 'mp', 'itau'];
+  return `<div class="ctab"><div class="ct-bar"><button data-act="ctab-close" aria-label="Fechar">✕</button><div><b>Meu Pluggy</b><small>🔒 meu.pluggy.ai</small></div></div><div class="ct-body"><span class="sys-tag">SIMULAÇÃO · SITE DO MEU PLUGGY, NÃO O APP</span><h2>${c.mode === 'renew' ? 'Renovar autorização' : 'Autorizar acesso'}</h2><p>A sua aplicação “Finanças” quer ler os dados de ${c.mode === 'renew' ? 'um banco seu por mais 1 ano' : 'um banco seu. Escolha qual'}.</p>${opts.map(id => `<button class="ct-opt ${c.pick === id ? 'on' : ''}" data-act="ctab-pick" data-arg="${id}"><i></i>${BANKS[id].name}</button>`).join('')}<button class="ct-go" data-act="ctab-ok">Autorizar</button><p style="font-size:12px;margin-top:14px">Fechar no ✕ simula sair sem autorizar.</p></div></div>`;
+}
+function sysHTML() {
+  const s = S.sys, tag = '<span class="sys-tag">SIMULAÇÃO · TELA DO ANDROID</span>';
+  if (s.bio) return `<div class="sys-bg"><div class="sys-sheet bio">${tag}<b>Finanças</b><p>${s.reason}</p><button class="fp" data-act="bio-ok" aria-label="Tocar no sensor">${icon('finger', { size: 40, sw: 1.4 })}</button><p>Toque no sensor de digital</p><div class="sys-btns"><button data-act="bio-cancel">Cancelar</button><button data-act="bio-ok">Usar PIN</button></div></div></div>`;
+  if (s.share) return `<div class="sys-bg" data-act="share-cancel"><div class="sys-sheet" data-act="noop">${tag}<div class="sys-file">financas-backup-2026-11-08.financas · 2,4 MB</div><div class="sys-grid">${['Drive', 'Gmail', 'WhatsApp', 'Arquivos'].map(n => `<button data-act="share-pick"><i></i>${n}</button>`).join('')}</div></div></div>`;
+  if (s.picker) return `<div class="sys-bg" data-act="picker-cancel"><div class="sys-sheet" data-act="noop">${tag}<b style="font-size:17px">Arquivos recentes</b><div class="sys-list" style="margin-top:8px"><button data-act="pick" data-arg="ok">financas-backup-2026-10-06.financas<small>2,3 MB · Drive</small></button><button data-act="pick" data-arg="v2">financas-backup-2026-11-01.financas<small>2,4 MB · Downloads · feito numa versão mais nova</small></button></div></div></div>`;
+  return '';
+}
+
+// ============================================================
+// Render
+// ============================================================
+function R() {
+  let inner;
+  if (S.locked) inner = lockScreen();
+  else if (S.wait) inner = waitScreen();
+  else if (S.flow) inner = flowScreen();
+  else if (S.stack.length) inner = stackScreen();
+  else inner = tabsScreen();
+  const over = (S.sheet && !S.locked ? sheetHTML() : '') + (S.ctab ? ctabHTML() : '') + (S.sys ? sysHTML() : '') + (S.toast ? `<div class="toast" role="status">${S.toast}</div>` : '');
+  return `<div class="r3 ${S.mode === 'dark' ? 'dark' : ''}">${inner}${over}</div>`;
+}
+const where = () => S.locked ? 'bloqueio' : S.wait ? 'espera do Meu Pluggy' : S.flow ? 'entrada: ' + S.flow : S.stack.length ? S.stack.map(s => s.id === 'leaf' ? s.leaf : s.id + (s.arg ? ':' + s.arg : '')).join(' › ') : 'aba ' + S.tab;
+function renderNotes() {
+  const v = VARIANTS[V()], av = avisos();
+  const cyc = id => `<button data-act="sc-conn" data-arg="${id}"><b>${BANKS[id].short}</b>${S.order.includes(id) ? ST[S.conn[id]][0] : 'não conectado'}</button>`;
+  document.getElementById('notes').innerHTML = `<span class="n-tag">PROTÓTIPO · DESCARTÁVEL</span><h1>Telas fora das abas</h1><p style="font-size:13px;opacity:.75">Rodada 1. A pergunta: como as telas fora das abas se penduram nas quatro abas. As telas comuns (entrada, credenciais, backup, edição, erros) são uma proposta só, igual nas três.</p>
+  <h2>${V()}. ${v.name}</h2><p>${v.idea}</p>
+  <h3>Ir para</h3><div class="go">${[['tabs', 'Resumo com aviso'], ['config', 'Configurações'], ['conexoes', 'Conexões'], ['edit', 'Editar transação'], ['regras', 'Regras'], ['backup', 'Backup'], ['backup1', 'Primeiro backup'], ['welcome', 'Primeira abertura'], ['restore', 'Restaurar backup'], ['lock', 'Bloqueio'], ['empty', 'Sem bancos'], ['credrec', 'Credenciais recusadas'], ['erro', 'Tela de erro'], ['semchave', 'Banco sem chave'], ['fundos', 'Download dos fundos'], ['apagar', 'Apagar tudo'], ['creditos', 'Créditos']].map(([k, l]) => `<button data-act="goto" data-arg="${k}">${l}</button>`).join('')}</div>
+  <h3>Cenário (toque para trocar)</h3><div class="sc">${cyc('btg')}${cyc('nubank')}${cyc('mp')}<button data-act="sc-cred"><b>Credenciais</b>${S.credRefused ? 'recusadas' : 'aceitas'}</button><button data-act="sc-bkp"><b>Último backup</b>${S.backupDays === null ? 'nunca' : S.backupDays + ' dias'}</button><button data-act="sc-lock"><b>Bloqueio de tela</b>${S.noScreenLock ? 'celular sem' : 'celular com'}</button><button data-act="sc-wipe"><b>Apagar tudo</b>${S.failDelete ? 'Meu Pluggy falha' : 'funciona'}</button><button data-act="sc-snooze"><b>“Agora não”</b>${Object.keys(S.snoozed).length ? Object.keys(S.snoozed).length + ' adiado(s): desfazer' : 'nada adiado'}</button><button data-act="pull"><b>Puxar para atualizar</b>simular</button></div>
+  <h3>Para reparar</h3><ul>
+  <li>No cenário de partida (BTG vencendo, Nubank atrasado, backup de 34 dias), qual aviso no Resumo chama atenção sem gritar: a faixa (A), a linha de estado (B) ou a linha da lista (C)?</li>
+  <li>Do Resumo, ache o Nubank e resolva. Em qual variante o caminho é óbvio?</li>
+  <li>Numa Conexão atrasada: a frase, “Abrir o Meu Pluggy” e “Reconectar” ficam claros?</li>
+  <li>A página única (C) fica longa demais? A pilha (A) fica funda demais?</li>
+  <li>Nas telas comuns, diga o que muda em cada uma: texto, ordem, o que falta.</li></ul>
+  <h3>Estado (em memória)</h3><div class="state">tela: ${esc(where())}
+Conexões: ${S.order.map(id => BANKS[id].short + '=' + S.conn[id]).join(', ') || 'nenhuma'}
+avisos: ${av.map(a => a.k).join(' > ') || 'nenhum'}
+regras: ${S.rules.map(r => '“' + r.match + '” → ' + ruleOut(r)).join('; ') || 'nenhuma'}
+edições à mão: ${Object.keys(S.overrides).length}
+bloqueio: ${S.lockOn ? 'ligado' : 'desligado'} · tema: ${S.theme} · canal: ${S.channel}</div>
+  <p class="fine">Dados inventados. Nenhum valor é real. A Custom Tab do Meu Pluggy, a biometria, a folha de compartilhar e o seletor de arquivos são simulações marcadas em amarelo.</p>`;
+}
+
+// ============================================================
+// Actions
+// ============================================================
+let toastTimer;
+function toast(msg) { S.toast = msg; clearTimeout(toastTimer); toastTimer = setTimeout(() => { S.toast = null; render(); }, 3200); }
+function setVariant(v) { S.variant = v; S.stack = S.stack.filter(s => s.id !== 'conexao' || v === 'A'); S.sheet = S.sheet && S.sheet.leaf ? null : S.sheet; try { const u = new URL(location.href); u.searchParams.set('variant', v); history.replaceState(null, '', u); } catch (e) { /* file:// may refuse */ } }
+function reset() { Object.assign(S, { flow: null, stack: [], sheet: null, sys: null, ctab: null, wait: null, locked: false, credErr: null, rErr: null, checking: false, tab: 'mes', acc: 'all' }); S.form = {}; if (!S.order.length) { S.order = ['btg', 'nubank', 'mp']; S.conn = DEFAULT_CONN(); } }
+function openConexoes(focus) { if (V() === 'C') S.stack.push({ id: 'config' }); else { S.stack.push({ id: 'conexoes' }); if (focus && V() === 'A') S.stack.push({ id: 'conexao', arg: focus }); if (focus && V() === 'B') S.expanded = focus; } }
+function goAviso(a) { if (!a) return; const [k, arg] = a.go; if (k === 'leaf') openLeaf(arg); if (k === 'renew') ACT.renew(arg); if (k === 'conn') openConexoes(arg); }
+function ctabOk() {
+  const c = S.ctab; if (!c.pick) return toast('Escolha um banco');
+  S.ctab = null; S.wait = { ...c, phase: 'espera' };
+  setTimeout(() => {
+    if (!S.wait || S.wait.phase !== 'espera') return;
+    const id = c.pick, existed = S.order.includes(id); S.wait = null;
+    if (existed) { S.conn[id] = 'ok'; toast(c.mode === 'renew' ? `Conexão com o ${BANKS[id].short} renovada até 08/11/2027` : `O ${BANKS[id].short} já estava no app: a Conexão foi renovada`); }
+    else {
+      S.order.push(id); S.conn[id] = 'lendo';
+      setTimeout(() => { if (S.conn[id] === 'lendo') { S.conn[id] = 'ok'; render(); } }, 5000);
+      if (!S.flow) { if (V() === 'C') { if (!S.stack.some(s => s.id === 'config')) S.stack.push({ id: 'config' }); } else if (!S.stack.some(s => s.id === 'conexoes')) S.stack.push({ id: 'conexoes' }); }
+    }
+    if (S.flow === 'pretab') S.flow = 'entrada';
+    render();
+  }, 1600);
+}
+function credSubmit(mode) {
+  const cid = (S.form.cid || '').trim(), sec = (S.form.sec || '').trim();
+  if ((mode === 'onb' && !cid) || !sec) { S.credErr = mode === 'onb' ? 'Preencha os dois campos.' : 'Cole o Client Secret.'; return; }
+  S.credErr = null; S.checking = true;
+  setTimeout(() => {
+    S.checking = false;
+    if (/errad/i.test(sec)) S.credErr = 'O Pluggy recusou essas credenciais. Confira se copiou o Client Secret inteiro, da mesma aplicação do Client ID.';
+    else {
+      S.form.sec = '';
+      if (mode === 'onb') S.flow = 'pretab';
+      else if (mode === 'restore') { S.flow = null; S.order = ['btg', 'nubank', 'mp']; S.conn = { btg: 'ok', nubank: 'ok', mp: 'ok' }; S.backupDays = 33; S.tab = 'mes'; toast('Backup de 06/10 restaurado. As Conexões voltaram sem reconectar.'); }
+      else { if (mode === 'fix') S.credRefused = false; closeLeaf(); toast(mode === 'fix' ? 'Credenciais atualizadas. Sincronizando…' : 'Client Secret atualizado'); }
+    }
+    render();
+  }, 900);
+}
+function backupGo(arg) {
+  const creating = arg === 'new';
+  if (creating) { const a = S.form.pw1 || '', b = S.form.pw2 || ''; if (a.length < 4) { S.form.bkErr = 'Use pelo menos 4 caracteres.'; return; } if (a !== b) { S.form.bkErr = 'As duas senhas não são iguais.'; return; } S.pwd = a; S.hasPwd = true; }
+  else if ((S.form.pw || '') !== S.pwd) { S.form.bkErr = 'Senha errada. Se esqueceu, crie uma nova: ela vale para os próximos backups.'; return; }
+  S.form.bkErr = null; S.form.pw = S.form.pw1 = S.form.pw2 = ''; S.sys = { share: true };
+}
+function bioOk() {
+  const n = S.sys.next; S.sys = null;
+  if (n === 'unlock') S.locked = false;
+  if (n === 'apagar') { S.wipeFailed = S.failDelete; S.order = []; S.overrides = {}; S.rules = []; S.stack = []; S.sheet = null; S.credRefused = false; S.snoozed = {}; S.flow = 'wiped'; }
+}
+const ACT = {
+  'variant-prev': () => setVariant(ORDER[(ORDER.indexOf(S.variant) + 2) % 3]), 'variant-next': () => setVariant(ORDER[(ORDER.indexOf(S.variant) + 1) % 3]),
+  mode: () => { S.mode = S.mode === 'dark' ? 'light' : 'dark'; S.theme = S.mode === 'dark' ? 'escuro' : 'claro'; },
+  tab: t => { S.tab = t; S.sheet = null; }, acc: a => { S.acc = a; },
+  back: () => { S.stack.pop(); S.credErr = null; S.form.bkErr = null; },
+  push: spec => { const [id, arg] = spec.split(':'); S.stack.push({ id, arg }); },
+  leaf: spec => openLeaf(spec), 'leaf-replace': spec => { closeLeaf(); openLeaf(spec); },
+  'open-config': () => S.stack.push({ id: 'config' }), 'open-conexoes': () => openConexoes(),
+  expand: id => { S.expanded = S.expanded === id ? null : id; },
+  'av-go': () => goAviso(avisos()[0]),
+  'av-snooze': () => { const a = avisos()[0]; if (a) { S.snoozed[a.k] = true; toast('Este aviso volta em 30 dias'); } },
+  renew: id => { S.ctab = { mode: 'renew', bank: id, pick: id }; },
+  connect: () => { if (S.order.length >= 5) return toast('Já são 5 bancos, o máximo do Meu Pluggy'); S.ctab = { mode: 'connect', pick: null }; },
+  meupluggy: () => toast('Abre o Meu Pluggy no navegador, onde você refaz o login do banco'),
+  help: () => toast('Abre “Problemas comuns” no guia, na seção deste caso'),
+  ext: a => toast(a === 'gh' ? 'Abre o repositório no GitHub' : a === 'fonte' ? 'Abre a página da fonte' : 'Abre o guia no navegador'),
+  diag: () => toast('Diagnóstico copiado. Cole no WhatsApp de quem te ajuda.'),
+  toast: m => toast(m),
+  remove: id => { S.sheet = { remove: id }; },
+  'remove-ok': id => { S.order = S.order.filter(x => x !== id); S.sheet = null; if (S.stack.at(-1) && S.stack.at(-1).id === 'conexao') S.stack.pop(); toast(`${BANKS[id].short} removido, aqui e no Meu Pluggy`); },
+  'sheet-close': () => { S.sheet = null; S.form.rulekey = null; },
+  'ctab-pick': id => { S.ctab.pick = id; }, 'ctab-ok': () => ctabOk(),
+  'ctab-close': () => { const c = S.ctab; S.ctab = null; S.wait = { ...c, phase: 'falhou' }; },
+  'wait-retry': () => { const w = S.wait; S.wait = null; S.ctab = { mode: w.mode, bank: w.bank, pick: w.pick }; },
+  'wait-cancel': () => { S.wait = null; },
+  flow: f => { S.flow = f; S.credErr = null; },
+  'cred-submit': m => credSubmit(m),
+  'lock-toggle': () => { S.lockOn = !S.lockOn; },
+  theme: t => { S.theme = t; S.mode = t === 'claro' ? 'light' : t === 'escuro' ? 'dark' : sysMode(); },
+  'ver-tap': () => { S.taps++; if (S.taps >= 7) { S.taps = 0; S.channel = S.channel === 'preview' ? 'production' : 'preview'; toast(S.channel === 'preview' ? 'Canal preview ligado. A próxima abertura busca as atualizações de teste.' : 'De volta ao canal production.'); } },
+  'backup-go': a => backupGo(a),
+  'share-pick': () => { S.sys = null; S.backupDays = 0; delete S.snoozed.bkp; closeLeaf(); toast('Backup feito. Guarde o arquivo fora deste celular.'); },
+  'share-cancel': () => { S.sys = null; }, 'picker-cancel': () => { S.sys = null; },
+  restore: () => { S.sys = { picker: true }; },
+  pick: f => { S.sys = null; S.flow = 'rpwd'; S.rfile = f; S.rErr = f === 'v2' ? 'versao' : null; },
+  'r-submit': () => { if ((S.form.rpw || '') === 'errada' || !(S.form.rpw || '')) { S.rErr = 'senha'; return; } S.rErr = null; S.form.rpw = ''; S.flow = 'rsecret'; },
+  'apagar-go': () => { S.sys = { bio: true, reason: 'Confirme que é você para apagar tudo', next: 'apagar' }; },
+  unlock: () => { S.sys = { bio: true, reason: 'Desbloquear o Finanças', next: 'unlock' }; },
+  'bio-ok': () => bioOk(), 'bio-cancel': () => { S.sys = null; },
+  'tx-open': id => { const t = TX.find(x => x.id === +id), e = eff(t); S.form.rulekey = null; S.sheet = { edit: { id: t.id, nat: e.nat, cat: e.cat || null, orig: e.orig || null, rule: false } }; },
+  'ed-nat': k => { const E = S.sheet.edit; E.nat = k; if (k === 'gasto' && !E.cat) E.cat = 'outros'; if (k === 'receita' && !E.orig) E.orig = 'outras'; },
+  'ed-cat': k => { S.sheet.edit.cat = k === 'none' ? null : k; }, 'ed-orig': k => { S.sheet.edit.orig = k; },
+  'ed-rule': () => { S.sheet.edit.rule = !S.sheet.edit.rule; },
+  'ed-save': () => {
+    const E = S.sheet.edit, t = TX.find(x => x.id === E.id), keep = { nat: E.nat, cat: (E.nat === 'gasto' || E.nat === 'reembolso') ? E.cat : null, orig: E.nat === 'receita' ? (E.orig || 'outras') : null };
+    if (E.rule) { const key = String(S.form.rulekey != null ? S.form.rulekey : ruleKey(t)).trim(); const r = { match: key, nat: keep.nat }; if (keep.cat) r.cat = keep.cat; if (keep.orig) r.orig = keep.orig; S.rules = S.rules.filter(x => x.match.toLowerCase() !== key.toLowerCase()); S.rules.unshift(r); delete S.overrides[t.id]; toast(`Regra criada: “${esc(key)}” vira ${ruleOut(r)} em ${countRule(r)} transações`); }
+    else { S.overrides[t.id] = keep; toast(`“${esc(t.desc)}” agora é ${ruleOut(keep)}`); }
+    S.sheet = null; S.form.rulekey = null;
+  },
+  'rule-del': i => { S.rules.splice(+i, 1); },
+  'fundos-ok': () => { S.sheet = null; toast('Baixando 135 MB da CVM. Você pode usar o app enquanto isso.'); },
+  'fundos-wait': () => { S.sheet = null; toast('O app baixa sozinho quando entrar no Wi-Fi'); },
+  'semchave-new': () => { S.flow = 'welcome'; },
+  'entrada-done': () => { S.flow = null; S.tab = 'mes'; if (S.order.length) S.sys = null; },
+  'err-back': () => { S.stack = []; S.tab = 'mes'; },
+  goto: k => GOTO[k](),
+  'sc-conn': id => { const cyc = ['ok', 'vencendo', 'atrasada', 'reconectar']; if (!S.order.includes(id)) { S.order.push(id); S.conn[id] = 'ok'; return; } S.conn[id] = cyc[(cyc.indexOf(S.conn[id]) + 1) % cyc.length]; },
+  'sc-cred': () => { S.credRefused = !S.credRefused; },
+  'sc-bkp': () => { S.backupDays = S.backupDays === 34 ? null : S.backupDays === null ? 3 : 34; delete S.snoozed.bkp; },
+  'sc-lock': () => { S.noScreenLock = !S.noScreenLock; }, 'sc-wipe': () => { S.failDelete = !S.failDelete; },
+  'sc-snooze': () => { S.snoozed = {}; },
+  pull: () => { const bad = S.order.find(id => S.conn[id] === 'atrasada'); toast(bad ? `Não deu para atualizar o ${BANKS[bad].short} agora` : 'Tudo atualizado'); },
+};
+const GOTO = {
+  tabs: () => reset(), config: () => { reset(); S.stack.push({ id: 'config' }); }, conexoes: () => { reset(); openConexoes('nubank'); },
+  edit: () => { reset(); S.tab = 'tx'; ACT['tx-open'](3); }, regras: () => { reset(); S.tab = 'tx'; openLeaf('regras'); },
+  backup: () => { reset(); S.hasPwd = true; S.stack.push({ id: 'config' }); openLeaf('backup'); },
+  backup1: () => { reset(); S.hasPwd = false; S.backupDays = null; S.stack.push({ id: 'config' }); openLeaf('backup'); },
+  welcome: () => { reset(); S.flow = 'welcome'; }, restore: () => { reset(); S.flow = 'welcome'; S.sys = { picker: true }; },
+  lock: () => { reset(); S.locked = true; S.sys = { bio: true, reason: 'Desbloquear o Finanças', next: 'unlock' }; },
+  empty: () => { reset(); S.order = []; }, credrec: () => { reset(); S.credRefused = true; },
+  erro: () => { reset(); S.stack = [{ id: 'erro' }]; }, semchave: () => { reset(); S.flow = 'semchave'; },
+  fundos: () => { reset(); S.tab = 'pat'; S.estimating = true; S.sheet = { fundos: true }; },
+  apagar: () => { reset(); S.stack.push({ id: 'config' }); openLeaf('apagar'); }, creditos: () => { reset(); S.stack.push({ id: 'config' }); openLeaf('creditos'); },
+};
+const SCROLL = {};
+function render() {
+  const app = document.getElementById('app');
+  app.querySelectorAll('[data-scroll]').forEach(el => { SCROLL[el.dataset.scroll] = el.scrollTop; });
+  app.innerHTML = R();
+  app.querySelectorAll('[data-scroll]').forEach(el => { const y = SCROLL[el.dataset.scroll]; if (y) el.scrollTop = y; });
+  document.getElementById('sw-label').textContent = `${S.variant}. ${VARIANTS[S.variant].name}`;
+  document.getElementById('sw-mode').textContent = S.mode === 'dark' ? '☀' : '☾';
+  document.body.classList.toggle('dark-stage', S.mode === 'dark');
+  renderNotes();
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const act = el.getAttribute('data-act'); if (act === 'noop') return;
+  const fn = ACT[act]; if (!fn) return;
+  fn(el.getAttribute('data-arg'), el); render();
+});
+document.addEventListener('input', e => { if (e.target.name) S.form[e.target.name] = e.target.value; });
+document.addEventListener('keydown', e => {
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
+  if (e.key === 'ArrowLeft') { ACT['variant-prev'](); render(); }
+  if (e.key === 'ArrowRight') { ACT['variant-next'](); render(); }
+});
+const sysMode = () => (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+S.mode = sysMode();
+const q = new URLSearchParams(location.search), qv = (q.get('variant') || '').toUpperCase();
+if (ORDER.includes(qv)) S.variant = qv;
+if (q.get('mode') === 'dark' || q.get('mode') === 'light') S.mode = q.get('mode');
+render();
+if (document.fonts) document.fonts.ready.then(render);
+</script>
+</body>
+</html>
