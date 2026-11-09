@@ -89,8 +89,8 @@ export default function Transacoes() {
           </Pressable>
         ))}
       </ScrollView>
-      {dataAt ? <Fine style={{ paddingHorizontal: 24, marginTop: 8 }}>Dados de {dataAt}</Fine> : null}
-      {notice ? <Fine style={{ paddingHorizontal: 24, marginTop: 4 }}>{notice}</Fine> : null}
+      {dataAt ? <View style={{ paddingHorizontal: 24, marginTop: 8 }}><Fine>Dados de {dataAt}</Fine></View> : null}
+      {notice ? <View style={{ paddingHorizontal: 24, marginTop: 4 }}><Fine>{notice}</Fine></View> : null}
       <FlatList
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         style={{ marginTop: 12 }}
