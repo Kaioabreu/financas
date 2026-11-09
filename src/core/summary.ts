@@ -3,6 +3,7 @@
 import { bankTransaction } from "../db/schema";
 import type { AppCategory, Classification, IncomeOrigin } from "./classification";
 import type { CoreDatabase } from "./createCore";
+import { buildInstallmentPlan } from "./installments";
 
 export interface Week {
   /** First and last day of the month this week covers (cut at the month's edges). */
@@ -86,7 +87,10 @@ export function createSummary(deps: Deps): SummaryApi {
   async function counted(): Promise<Entry[]> {
     const now = new Date(deps.clock());
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const rows = (await deps.db.select().from(bankTransaction)).filter((r) => r.date.slice(0, 10) <= today);
+    const plan = await buildInstallmentPlan(deps.db);
+    const rows = (await deps.db.select().from(bankTransaction))
+      .map((r) => ({ ...r, date: plan.dateOf(r.id, r.date) }))
+      .filter((r) => r.date <= today);
     const classes = await deps.classify(rows.map((r) => r.id));
     return rows.map((r) => ({
       date: r.date.slice(0, 10),

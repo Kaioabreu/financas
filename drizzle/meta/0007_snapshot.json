@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d1780f35-3323-439b-9868-3180daa5978a",
-  "prevId": "a2fe8329-fea9-42fc-88a7-8a42c6ac52fc",
+  "id": "6a92a26d-236d-4118-ba1b-02e70fff23c3",
+  "prevId": "38b90e23-3b6d-4a36-9d62-d96bc0d35bf1",
   "tables": {
     "account": {
       "name": "account",
@@ -363,6 +363,34 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "reconnect_reason": {
+          "name": "reconnect_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "pluggy_status": {
+          "name": "pluggy_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "pluggy_execution": {
+          "name": "pluggy_execution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "pluggy_updated_at": {
+          "name": "pluggy_updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {},
@@ -404,6 +432,44 @@
         },
         "extra": {
           "name": "extra",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "installment_edit": {
+      "name": "installment_edit",
+      "columns": {
+        "group_key": {
+          "name": "group_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nature": {
+          "name": "nature",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "origin": {
+          "name": "origin",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

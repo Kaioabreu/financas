@@ -51,6 +51,8 @@ interface Deps {
   onLock?: (itemId: string, percent: number) => Promise<void>;
   /** Told which transactions appeared in a read, so hand edits can follow recreated ones. */
   moveEdits?: (newIds: string[]) => Promise<void>;
+  /** True while Pluggy refuses the credentials: nothing syncs. */
+  credentialsRefused?: () => Promise<boolean>;
   /** Writes the Retrato of the Connection for today; `unavailable` when Pluggy flagged a resource. */
   takeSnapshot?: (itemId: string, unavailable: boolean) => Promise<void>;
   /** Runs or retries the estimate of the 12 months before the first read; never throws. */
@@ -139,10 +141,21 @@ export function createSync(deps: Deps): SyncApi {
     if (!conn) return;
 
     const itemResponse = await call(`/items/${itemId}`);
+    if (itemResponse.status === 404) {
+      await setConnection(itemId, { reconnectReason: "not-found" }); // only a new login brings it back
+      throw new SkipRead();
+    }
     if (itemResponse.status !== 200) throw new Error(`item ${itemResponse.status}`);
     const pluggyItem = (await json(itemResponse)) as any;
     const lastUpdatedAt: string | null = iso(pluggyItem?.lastUpdatedAt);
     const execution: string = pluggyItem?.executionStatus ?? "SUCCESS";
+    await setConnection(itemId, {
+      pluggyStatus: iso(pluggyItem?.status),
+      pluggyExecution: iso(pluggyItem?.executionStatus),
+      pluggyUpdatedAt: lastUpdatedAt,
+      ...(pluggyItem?.status === "LOGIN_ERROR" ? { reconnectReason: "login-error" } : {}),
+    });
+    if (pluggyItem?.status === "LOGIN_ERROR") throw new SkipRead();
 
     // Nothing new, and the last attempt completed: nothing to read.
     if (!force && conn.attemptComplete && conn.lastReadAt && lastUpdatedAt && lastUpdatedAt <= conn.lastReadAt) {
@@ -443,8 +456,10 @@ export function createSync(deps: Deps): SyncApi {
   /** Runs one Connection's read. Resolves true when it failed. */
   async function read(itemId: string, force: boolean): Promise<boolean> {
     if (inFlight.has(itemId)) return false;
-    const [due] = await db.select({ at: connection.consentExpiresAt }).from(connection).where(eq(connection.itemId, itemId));
-    if (due && isExpired(due.at, deps.clock())) return false; // expired: no sync, the data stays
+    const [due] = await db.select().from(connection).where(eq(connection.itemId, itemId));
+    if (due && isExpired(due.consentExpiresAt, deps.clock())) return false; // expired: no sync, the data stays
+    if (due?.reconnectReason) return false; // a reconectar: only a new login helps, the data stays
+    if (await deps.credentialsRefused?.()) return false;
     inFlight.add(itemId);
     try {
       await mirrorRead(itemId, force);
@@ -480,6 +495,7 @@ export function createSync(deps: Deps): SyncApi {
     },
 
     async sync({ manual }) {
+      if (await deps.credentialsRefused?.()) return { notices: [] };
       const rows = await db.select().from(connection);
       const results = await Promise.all(
         rows

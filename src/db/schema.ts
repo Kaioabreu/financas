@@ -26,6 +26,12 @@ export const connection = sqliteTable("connection", {
   dataAt: text("data_at"),
   /** JSON: the state of the estimate of the 12 months before the first read (see core/estimate.ts). */
   estimate: text("estimate"),
+  /** Why only a new login helps: "login-error" | "not-found". Null otherwise. */
+  reconnectReason: text("reconnect_reason"),
+  /** What the item said at the last check: status, executionStatus and lastUpdatedAt. */
+  pluggyStatus: text("pluggy_status"),
+  pluggyExecution: text("pluggy_execution"),
+  pluggyUpdatedAt: text("pluggy_updated_at"),
 });
 
 /** Bank accounts and credit cards, as Pluggy sent them (Pluggy ids). */
@@ -150,3 +156,11 @@ export const snapshot = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.date, t.itemId] })],
 );
+
+/** A classification set by hand on a compra parcelada: it holds for every parcel, future ones too. */
+export const installmentEdit = sqliteTable("installment_edit", {
+  groupKey: text("group_key").primaryKey(),
+  nature: text("nature").notNull(),
+  category: text("category"),
+  origin: text("origin"),
+});

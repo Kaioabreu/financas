@@ -4,6 +4,8 @@ import { account, bankTransaction, bill, connection, identity, investment, inves
 import type { Classification, ClassificationSource, ClassifiedAs } from "./classification";
 import type { EmbeddedConfig } from "./config";
 import type { CoreDatabase } from "./createCore";
+import { buildInstallmentPlan } from "./installments";
+import { dayLabel, deriveStatus, type ConnectionStatus } from "./status";
 
 export type ConnectErrorKind = "limit" | "offline" | "unexpected";
 export interface ConnectError {
@@ -21,7 +23,7 @@ export type ReadState = "reading" | "done" | "failed";
 /** Days before the expiry from which the Connection asks to be renewed. */
 export const EXPIRY_WARNING_DAYS = 30;
 const DAY_MS = 86_400_000;
-export type ConnectionState = "reading" | "ok" | "expiring" | "expired";
+export type ConnectionState = "reading" | "ok" | "expiring" | "late" | "reconnect";
 /** Days left of the authorization (rounded up), or null when Pluggy sent no expiry. */
 export function daysUntil(expiresAt: string | null, now: number): number | null {
   const at = expiresAt ? Date.parse(expiresAt) : NaN;
@@ -47,12 +49,16 @@ export interface ConnectionSummary {
   /** Days left of the authorization; null when unknown. */
   daysLeft: number | null;
   state: ConnectionState;
+  /** Set when the Connection is atrasada or a reconectar. */
+  status: ConnectionStatus | null;
 }
 export interface AccountSummary {
   id: string;
   itemId: string;
   name: string;
   kind: "account" | "card";
+  /** "03/11" when the account's data stopped (its Connection is atrasada or a reconectar). */
+  dataFrom: string | null;
 }
 export interface TransactionRow {
   id: string;
@@ -70,6 +76,10 @@ export interface TransactionRow {
   accountId: string;
   /** The account's name, as Pluggy sent it. */
   accountName: string;
+  /** "k de N", for a parcela of a compra parcelada. */
+  installment?: { number: number; total: number };
+  /** YYYY-MM-DD: the day of the purchase, for a parcela. */
+  purchaseDate?: string;
 }
 
 export interface ConnectionsApi {
@@ -106,6 +116,8 @@ interface Deps {
   sleep: (ms: number) => Promise<void>;
   request: (method: string, path: string, body?: unknown) => Promise<Response>;
   classify: (ids: string[]) => Promise<Map<string, ClassifiedAs>>;
+  /** True while Pluggy refuses the credentials: the 48 h clock is stopped. */
+  credentialsRefused: () => Promise<boolean>;
 }
 
 interface PluggyItem {
@@ -178,7 +190,16 @@ export function createConnections(deps: Deps): ConnectionsApi {
   /** The Connection moves to the new item; data and hand edits stay untouched. */
   async function renew(oldItemId: string, newItemId: string, current: PluggyItem) {
     const [old] = await db.select().from(connection).where(eq(connection.itemId, oldItemId));
-    await db.insert(connection).values({ ...old!, itemId: newItemId, readState: "reading", consentExpiresAt: current.consentExpiresAt ?? null });
+    await db.insert(connection).values({
+      ...old!,
+      itemId: newItemId,
+      readState: "reading",
+      consentExpiresAt: current.consentExpiresAt ?? null,
+      reconnectReason: null,
+      pluggyStatus: null,
+      pluggyExecution: null,
+      pluggyUpdatedAt: null,
+    });
     await db.update(account).set({ itemId: newItemId }).where(eq(account.itemId, oldItemId));
     await db.update(investment).set({ itemId: newItemId }).where(eq(investment.itemId, oldItemId));
     await db.update(identity).set({ itemId: newItemId }).where(eq(identity.itemId, oldItemId));
@@ -281,15 +302,20 @@ export function createConnections(deps: Deps): ConnectionsApi {
     async listConnections() {
       const rows = await db.select().from(connection);
       const now = deps.clock();
+      const refused = await deps.credentialsRefused();
       return rows.map((r) => {
         const daysLeft = daysUntil(r.consentExpiresAt, now);
-        const state: ConnectionState = isExpired(r.consentExpiresAt, now)
-          ? "expired"
-          : r.readState === "reading"
-            ? "reading"
-            : daysLeft !== null && daysLeft <= EXPIRY_WARNING_DAYS
-              ? "expiring"
-              : "ok";
+        const status = deriveStatus(r, now, isExpired(r.consentExpiresAt, now), refused);
+        const state: ConnectionState =
+          status?.kind === "reconnect"
+            ? "reconnect"
+            : r.readState === "reading"
+              ? "reading"
+              : status
+                ? "late"
+                : daysLeft !== null && daysLeft <= EXPIRY_WARNING_DAYS
+                  ? "expiring"
+                  : "ok";
         return {
           itemId: r.itemId,
           bankName: r.bankName,
@@ -300,27 +326,31 @@ export function createConnections(deps: Deps): ConnectionsApi {
           consentExpiresAt: r.consentExpiresAt,
           daysLeft,
           state,
+          status,
         };
       });
     },
 
     async listAccounts() {
       const rows = await db.select().from(account);
-      return rows.map((r) => ({
-        id: r.id,
-        itemId: r.itemId,
-        name: r.name,
-        kind: r.type === "CREDIT" ? ("card" as const) : ("account" as const),
-      }));
+      const stopped = new Map((await this.listConnections()).filter((c) => c.status).map((c) => [c.itemId, c]));
+      const dates = new Map(
+        (await db.select().from(connection)).map((c) => [c.itemId, (c.productDates ? JSON.parse(c.productDates) : {}) as Record<string, string>]),
+      );
+      return rows.map((r) => {
+        const kind = r.type === "CREDIT" ? ("card" as const) : ("account" as const);
+        const conn = stopped.get(r.itemId);
+        const own = dates.get(r.itemId)?.[kind === "card" ? "creditCards" : "transactions"];
+        return { id: r.id, itemId: r.itemId, name: r.name, kind, dataFrom: conn ? dayLabel(own ?? conn.dataAt) : null };
+      });
     },
 
     async listTransactions({ accountId, month, category, days }) {
-      const monthRows = like(bankTransaction.date, `${month}-%`);
-      const rows = await db
-        .select()
-        .from(bankTransaction)
-        .where(accountId ? and(eq(bankTransaction.accountId, accountId), monthRows) : monthRows)
-        .orderBy(desc(bankTransaction.date));
+      // The month is the one the transaction counts in, not the one Pluggy dated it.
+      const plan = await buildInstallmentPlan(db);
+      const rows = (await (accountId ? db.select().from(bankTransaction).where(eq(bankTransaction.accountId, accountId)) : db.select().from(bankTransaction)))
+        .filter((r) => plan.dateOf(r.id, r.date).startsWith(`${month}-`))
+        .sort((a, b) => plan.dateOf(b.id, b.date).localeCompare(plan.dateOf(a.id, a.date)));
       const classes = await deps.classify(rows.map((r) => r.id));
       const owners = new Map((await db.select().from(account)).map((a) => [a.id, a.name]));
       const filtered = Boolean(category || days);
@@ -328,7 +358,10 @@ export function createConnections(deps: Deps): ConnectionsApi {
         .map((r) => ({
           id: r.id,
           description: r.description,
-          date: r.date.slice(0, 10),
+          date: plan.dateOf(r.id, r.date),
+          ...(plan.byId.get(r.id)?.installment
+            ? { installment: { number: plan.byId.get(r.id)!.installment!.number, total: plan.byId.get(r.id)!.installment!.total }, purchaseDate: plan.byId.get(r.id)!.installment!.purchaseDate }
+            : {}),
           amount: r.amountInAccountCurrency ?? r.amount,
           accountId: r.accountId,
           accountName: owners.get(r.accountId) ?? "",
