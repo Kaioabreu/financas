@@ -6,7 +6,8 @@ import m0001 from './0001_plain_shen.sql';
 import m0002 from './0002_mean_lockjaw.sql';
 import m0003 from './0003_secret_richard_fisk.sql';
 import m0004 from './0004_wonderful_rick_jones.sql';
-import m0005 from './0005_whole_harrier.sql';
+import m0005 from './0005_curious_bruce_banner.sql';
+import m0006 from './0006_organic_princess_powerful.sql';
 
   export default {
     journal,
@@ -16,7 +17,8 @@ m0001,
 m0002,
 m0003,
 m0004,
-m0005
+m0005,
+m0006
     }
   }
   

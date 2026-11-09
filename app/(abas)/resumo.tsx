@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { NoticeQueue } from "../../src/core/status";
 import type { ConnectionSummary } from "../../src/core/connections";
 import { bankNames, readTime, stateLabel } from "../../src/shell/connectionLabels";
 import type { MonthPoint, MonthSummary } from "../../src/core/summary";
@@ -11,7 +12,7 @@ import { money, moneyRound, signedMoney } from "../../src/shell/format";
 import { MonthBar } from "../../src/shell/MonthBar";
 import { monthLabel, useMonth } from "../../src/shell/month";
 import { originLabel } from "../../src/shell/labels";
-import { Body, Fine, font, usePalette } from "../../src/shell/theme";
+import { Body, Fine, font, LinkText, usePalette } from "../../src/shell/theme";
 
 const SHORT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
@@ -24,16 +25,18 @@ export default function Resumo() {
   const [summary, setSummary] = useState<MonthSummary | null>(null);
   const [history, setHistory] = useState<MonthPoint[]>([]);
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
+  const [queue, setQueue] = useState<NoticeQueue>({ shown: null, more: 0 });
   const router = useRouter();
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
-      const [s, h, conns] = await Promise.all([core.monthSummary(month), core.monthHistory(month, 6), core.listConnections()]);
+      const [s, h, conns, q] = await Promise.all([core.monthSummary(month), core.monthHistory(month, 6), core.listConnections(), core.notices()]);
       if (alive) {
         setSummary(s);
         setHistory(h);
         setConnections(conns);
+        setQueue(q);
       }
     };
     void load();
@@ -51,7 +54,21 @@ export default function Resumo() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>
       <MonthBar />
-      <StatusLine connections={connections} onPress={() => router.push("/conexoes")} />
+      <StatusLine
+        connections={connections}
+        queue={queue}
+        onOpenConnections={() => router.push("/conexoes")}
+        onAction={() => {
+          const n = queue.shown;
+          if (!n) return;
+          router.push(n.action === "update-secret" ? "/atualizar-secret" : n.action === "open-connections" ? "/conexoes" : "/conectar");
+        }}
+        onSnooze={async () => {
+          if (!queue.shown) return;
+          await core.snoozeNotice(queue.shown.key);
+          setQueue(await core.notices());
+        }}
+      />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32 }}>
         {summary ? (
           <>
@@ -139,20 +156,38 @@ function Legend({ color, label }: { color: string; label: string }) {
   );
 }
 
-/** Under the month: the banks and the last read, or what needs attention. Opens Conexões. */
-function StatusLine({ connections, onPress }: { connections: ConnectionSummary[]; onPress: () => void }) {
+/** Under the month: the one notice that matters most, or the banks and the last read. */
+function StatusLine({
+  connections,
+  queue,
+  onOpenConnections,
+  onAction,
+  onSnooze,
+}: {
+  connections: ConnectionSummary[];
+  queue: NoticeQueue;
+  onOpenConnections: () => void;
+  onAction: () => void;
+  onSnooze: () => void;
+}) {
   const c = usePalette();
-  if (connections.length === 0) return null;
-  const attention = connections.find((x) => stateLabel(x).attention);
+  if (connections.length === 0 && !queue.shown) return null;
   const last = connections.map((x) => x.lastReadAt).filter((x): x is string => Boolean(x)).sort().pop() ?? null;
-  const text = attention
-    ? attention.state === "expired"
-      ? `A conexão com o ${attention.bankName} venceu · Renovar`
-      : `A conexão com o ${attention.bankName} vence em ${Math.max(attention.daysLeft ?? 0, 0)} dias · Renovar`
+  const notice = queue.shown;
+  const text = notice
+    ? notice.text
     : `${bankNames(connections.map((x) => x.bankName))} · ${connections.some((x) => x.state === "reading") ? "Lendo…" : readTime(last)}`;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={{ paddingHorizontal: 24, paddingTop: 10 }}>
-      <Text style={{ fontFamily: font.regular, fontSize: 13.5, color: attention ? c.neg : c.ink2, textAlign: "center" }}>{text}</Text>
-    </Pressable>
+    <View style={{ paddingHorizontal: 24, paddingTop: 10, alignItems: "center", gap: 4 }}>
+      <Pressable onPress={notice ? onAction : onOpenConnections} accessibilityRole="button">
+        <Text style={{ fontFamily: font.regular, fontSize: 13.5, color: notice ? c.neg : c.ink2, textAlign: "center" }}>{text}</Text>
+      </Pressable>
+      {notice ? (
+        <View style={{ flexDirection: "row", gap: 16 }}>
+          {queue.more > 0 ? <LinkText onPress={onOpenConnections}>{`e mais ${queue.more}`}</LinkText> : null}
+          {notice.snoozable ? <LinkText onPress={onSnooze}>Agora não</LinkText> : null}
+        </View>
+      ) : null}
+    </View>
   );
 }

@@ -39,12 +39,16 @@ interface ConnectionRow {
   productDates: Record<string, string>;
   facts: ItemFacts | null;
   lockPercent: number | null;
+  /** State in the app ("em dia", "atrasada"...) and the cause code. */
+  appState: string | null;
+  appCause: string | null;
 }
 
 interface DiagnosticData {
   env: DiagnosticEnv;
   facts: Facts;
   connections: ConnectionRow[];
+  credentialsRefused: boolean;
 }
 
 /** A section turns the allowed data into lines. Add one here to grow the text. */
@@ -54,7 +58,7 @@ const orDash = (value: string | number | null | undefined) => (value === null ||
 
 const SECTIONS: Section[] = [
   ({ env }) => [`App ${env.appVersion} · atualização ${env.otaId ?? "embutida"}`],
-  ({ facts }) => [`/auth: HTTP ${orDash(facts.authStatus)}`],
+  ({ facts, credentialsRefused }) => [`/auth: HTTP ${orDash(facts.authStatus)}${credentialsRefused ? " · credenciais recusadas" : ""}`],
   ({ connections }) =>
     connections.flatMap((c, i) => {
       const f = c.facts;
@@ -66,6 +70,7 @@ const SECTIONS: Section[] = [
         `  isUpdated: ${products.join(", ") || "-"}`,
         `  lastUpdatedAt ${orDash(f?.lastUpdatedAt)} · nextAutoSyncAt ${orDash(f?.nextAutoSyncAt)} · consentExpiresAt ${orDash(c.consentExpiresAt)}`,
         `  leitura completa: ${full.join(", ") || "-"}`,
+        `  estado no app: ${c.appState ?? "-"} · causa ${c.appCause ?? "-"}`,
         ...(c.lockPercent !== null ? [`  trava ${c.lockPercent}%`] : []),
       ];
     }),
@@ -113,7 +118,20 @@ export interface Diagnostics {
   build(): Promise<string>;
 }
 
-export function createDiagnostics(deps: { db: CoreDatabase; env: DiagnosticEnv }): Diagnostics {
+const STATE_NAME: Record<string, string> = {
+  ok: "em dia",
+  reading: "lendo",
+  expiring: "vence em breve",
+  late: "atrasada",
+  reconnect: "a reconectar",
+};
+
+export function createDiagnostics(deps: {
+  db: CoreDatabase;
+  env: DiagnosticEnv;
+  states: () => Promise<{ itemId: string; state: string; cause: string | null }[]>;
+  credentialsRefused: () => Promise<boolean>;
+}): Diagnostics {
   const { db } = deps;
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -154,14 +172,17 @@ export function createDiagnostics(deps: { db: CoreDatabase; env: DiagnosticEnv }
       await queue;
       const facts = await load();
       const rows = await db.select().from(connection);
+      const states = new Map((await deps.states()).map((s) => [s.itemId, s]));
       const connections: ConnectionRow[] = rows.map((r) => ({
+        appState: STATE_NAME[states.get(r.itemId)?.state ?? ""] ?? null,
+        appCause: states.get(r.itemId)?.cause ?? null,
         bankName: r.bankName,
         consentExpiresAt: r.consentExpiresAt,
         productDates: r.productDates ? JSON.parse(r.productDates) : {},
         facts: facts.items[r.itemId] ?? null,
         lockPercent: r.lockTriggered ? (facts.locks[r.itemId] ?? null) : null,
       }));
-      const data: DiagnosticData = { env: deps.env, facts, connections };
+      const data: DiagnosticData = { env: deps.env, facts, connections, credentialsRefused: await deps.credentialsRefused() };
       return ["Diagnóstico do Finanças", ...SECTIONS.flatMap((section) => section(data))].join("\n");
     },
   };
