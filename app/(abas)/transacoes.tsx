@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import type { CpfStatus } from "../../src/core/classification";
 import { categoryLabel, natureLabel, originLabel } from "../../src/shell/labels";
 import { Body, Fine, font, LinkText, usePalette } from "../../src/shell/theme";
+import { EditSheet } from "../../src/shell/EditSheet";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -24,6 +25,7 @@ export default function Transacoes() {
   const [notice, setNotice] = useState<string | null>(null);
   const [cpf, setCpf] = useState<CpfStatus | null>(null);
   const router = useRouter();
+  const [editing, setEditing] = useState<TransactionRow | null>(null);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -69,7 +71,10 @@ export default function Transacoes() {
         <Pressable onPress={() => setMonth(shiftMonth(month, -1))} hitSlop={12} accessibilityLabel="Mês anterior">
           <Text style={{ fontFamily: font.medium, fontSize: 22, color: c.ink }}>‹</Text>
         </Pressable>
-        <Text style={{ fontFamily: font.semibold, fontSize: 18, color: c.ink }}>{monthLabel(month)}</Text>
+        <View style={{ alignItems: "center", gap: 2 }}>
+          <Text style={{ fontFamily: font.semibold, fontSize: 18, color: c.ink }}>{monthLabel(month)}</Text>
+          <LinkText onPress={() => router.push("/regras")}>Regras</LinkText>
+        </View>
         <Pressable onPress={() => setMonth(shiftMonth(month, 1))} hitSlop={12} accessibilityLabel="Próximo mês">
           <Text style={{ fontFamily: font.medium, fontSize: 22, color: c.ink }}>›</Text>
         </Pressable>
@@ -114,7 +119,9 @@ export default function Transacoes() {
           </Body>
         }
         renderItem={({ item }) => (
-          <View
+          <Pressable
+            onPress={() => setEditing(item)}
+            accessibilityRole="button"
             style={{
               flexDirection: "row",
               justifyContent: "space-between",
@@ -135,8 +142,15 @@ export default function Transacoes() {
             <Text style={{ fontFamily: font.medium, fontSize: 16, color: item.amount < 0 ? c.ink : c.acc }}>
               {brl.format(item.amount)}
             </Text>
-          </View>
+          </Pressable>
         )}
+      />
+      <EditSheet
+        row={editing}
+        onClose={() => {
+          setEditing(null);
+          void core.listTransactions({ accountId: selected ?? "", month }).then(setRows);
+        }}
       />
     </View>
   );

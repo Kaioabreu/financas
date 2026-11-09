@@ -31,3 +31,8 @@ export const categoryLabel: Record<AppCategory, { name: string; icon: string }> 
   "fees-taxes": { name: "Tarifas e impostos", icon: "％" },
   other: { name: "Outros", icon: "○" },
 };
+
+export const sourceLabel = { pluggy: "Pluggy", rule: "Regra", manual: "Edição à mão" } as const;
+export const natureOrder: Nature[] = ["expense", "income", "refund", "investment", "withdrawal", "own-transfer", "bill-payment", "personal-loan"];
+export const originOrder: IncomeOrigin[] = ["salary", "yield", "other-income"];
+export const categoryOrder = Object.keys(categoryLabel) as AppCategory[];

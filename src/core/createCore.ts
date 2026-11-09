@@ -150,6 +150,7 @@ export function createCore(deps: CoreDeps): Core {
     sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     request,
     onLock: diagnostics.recordLock,
+    moveEdits: classification.moveEdits,
   });
 
   return {
@@ -157,6 +158,12 @@ export function createCore(deps: CoreDeps): Core {
     ...sync,
     cpfStatus: classification.cpfStatus,
     setCpf: classification.setCpf,
+    editTransaction: classification.editTransaction,
+    previewRule: classification.previewRule,
+    addRule: classification.addRule,
+    deleteRule: classification.deleteRule,
+    listRules: classification.listRules,
+    moveEdits: classification.moveEdits,
     diagnostic: () => diagnostics.build(),
     async credentialsStatus() {
       const clientId = await readMeta(CLIENT_ID_KEY);

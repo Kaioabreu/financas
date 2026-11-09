@@ -47,6 +47,8 @@ interface Deps {
   request: (method: string, path: string, body?: unknown) => Promise<Response>;
   /** The lock held back a read: the biggest share of a product it would have deleted (0-100). */
   onLock?: (itemId: string, percent: number) => Promise<void>;
+  /** Told which transactions appeared in a read, so hand edits can follow recreated ones. */
+  moveEdits?: (newIds: string[]) => Promise<void>;
 }
 
 type Product = "accounts" | "creditCards" | "transactions" | "investments" | "investmentsTransactions" | "identity";
@@ -274,12 +276,17 @@ export function createSync(deps: Deps): SyncApi {
     }
 
     await inTransaction(async () => {
+      const knownIds = new Set((await db.select({ id: bankTransaction.id }).from(bankTransaction)).map((t) => t.id));
       for (const a of fetchedAccounts) {
         if (updated(isCard(a) ? "creditCards" : "accounts")) await upsertAccount(a, itemId);
       }
       for (const plan of plans) {
         for (const upsert of plan.upserts) await upsert();
         if (!locked && plan.stale.length) await removeInChunks(plan);
+      }
+      if (!locked && deps.moveEdits) {
+        const now = await db.select({ id: bankTransaction.id }).from(bankTransaction);
+        await deps.moveEdits(now.map((t) => t.id).filter((id) => !knownIds.has(id)));
       }
       if (fetchedIdentity) await upsertIdentity(fetchedIdentity, itemId);
       await setConnection(

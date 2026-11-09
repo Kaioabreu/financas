@@ -108,3 +108,28 @@ export const identity = sqliteTable("identity", {
   documentType: text("document_type"),
   extra: text("extra"),
 });
+
+/** A Regra the user made: transactions whose description contains `contains` get a nature and/or category. */
+export const userRule = sqliteTable("user_rule", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  /** Normalized (lower case, no accents). */
+  contains: text("contains").notNull(),
+  nature: text("nature"),
+  category: text("category"),
+  origin: text("origin"),
+});
+
+/**
+ * A classification the user set by hand on one transaction. It also keeps what identifies the
+ * transaction (account, amount, description, date) so it can follow it if Pluggy recreates it.
+ */
+export const manualEdit = sqliteTable("manual_edit", {
+  transactionId: text("transaction_id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  amount: real("amount").notNull(),
+  description: text("description").notNull(),
+  date: text("date").notNull(),
+  nature: text("nature").notNull(),
+  category: text("category"),
+  origin: text("origin"),
+});
