@@ -17,12 +17,13 @@ export function expiryText(c: ConnectionSummary): string {
   if (!c.consentExpiresAt) return "Sem data de vencimento";
   const d = new Date(c.consentExpiresAt);
   const full = `${day(d)}/${d.getFullYear()}`;
-  return c.state === "expired" ? `Venceu em ${full}` : `Vence em ${full}`;
+  return c.status?.causeCode === "expired" ? `Venceu em ${full}` : `Vence em ${full}`;
 }
 
 /** The status label and whether it asks for attention. */
 export function stateLabel(c: ConnectionSummary): { text: string; attention: boolean } {
-  if (c.state === "expired") return { text: "Conexão a reconectar", attention: true };
+  if (c.state === "reconnect") return { text: "Conexão a reconectar", attention: true };
+  if (c.state === "late") return { text: "Conexão atrasada", attention: true };
   if (c.state === "reading") return { text: "Lendo…", attention: false };
   if (c.state === "expiring") {
     const n = Math.max(c.daysLeft ?? 0, 0);

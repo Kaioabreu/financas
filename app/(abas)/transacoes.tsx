@@ -70,9 +70,7 @@ export default function Transacoes() {
     };
   }, [core, month, selected, filtered, category, days?.from, days?.to]);
 
-  const itemId = accounts.find((a) => a.id === selected)?.itemId;
-  const dataAtIso = connections.find((x) => x.itemId === itemId)?.dataAt;
-  const dataAt = dataAtIso ? dataAtIso.slice(0, 10).split("-").reverse().join("/") : null;
+  const dataAt = accounts.find((a) => a.id === selected)?.dataFrom ?? null;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>

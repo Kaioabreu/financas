@@ -10,6 +10,7 @@ import { createSync, type SyncApi } from "./sync";
 import { createNetWorth, type NetWorthApi } from "./networth";
 import { createSummary, type SummaryApi } from "./summary";
 import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
+import { buildNotices, readSnoozes, REFUSED_KEY, snoozeKey, SNOOZE_MS, type NoticeQueue } from "./status";
 
 /** Works with both the sync (expo-sqlite) and async drivers: every query is awaited. */
 export type CoreDatabase = BaseSQLiteDatabase<"sync" | "async", unknown, Record<string, unknown>>;
@@ -54,6 +55,14 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
   /** The "Copiar diagnóstico" text: only allow-listed facts, never amounts, names or ids. */
   diagnostic(): Promise<string>;
   credentialsStatus(): Promise<CredentialsStatus>;
+  /** True after Pluggy refused (401/403) the saved credentials, until the Client Secret is updated. */
+  credentialsRefused(): Promise<boolean>;
+  /** Keeps the Client ID and checks the new Client Secret with Pluggy before saving it. */
+  updateClientSecret(clientSecret: string): Promise<SaveCredentialsResult>;
+  /** The Resumo's one notice (highest priority) and how many more wait ("e mais N"). */
+  notices(): Promise<NoticeQueue>;
+  /** "Agora não": hides a notice for 30 days. Rejected credentials cannot be snoozed. */
+  snoozeNotice(key: string): Promise<void>;
   /** Checks the credentials with Pluggy (POST /auth) and saves them only on a 200. */
   saveCredentials(input: Credentials): Promise<SaveCredentialsResult>;
   /** An authenticated call to Pluggy; the apiKey is kept in memory and renewed after 2 h. */
@@ -65,7 +74,12 @@ const CLIENT_ID_KEY = "pluggy.clientId";
 export function createCore(deps: CoreDeps): Core {
   const { db, config } = deps;
   let apiKey: { value: string; expiresAt: number } | null = null;
-  const diagnostics = createDiagnostics({ db, env: deps.env ?? { appVersion: "?", otaId: null } });
+  const diagnostics = createDiagnostics({
+    db,
+    env: deps.env ?? { appVersion: "?", otaId: null },
+    states: async () => (await connections.listConnections()).map((c) => ({ itemId: c.itemId, state: c.state, cause: c.status?.causeCode ?? null })),
+    credentialsRefused: () => credentialsRefused(),
+  });
 
   async function readMeta(key: string): Promise<string | null> {
     const rows = await db.select().from(appMeta).where(eq(appMeta.key, key));
@@ -73,6 +87,10 @@ export function createCore(deps: CoreDeps): Core {
   }
   async function writeMeta(key: string, value: string) {
     await db.insert(appMeta).values({ key, value }).onConflictDoUpdate({ target: appMeta.key, set: { value } });
+  }
+
+  async function credentialsRefused() {
+    return (await readMeta(REFUSED_KEY)) === "1";
   }
 
   function failure(kind: CredentialsErrorKind): SaveCredentialsResult {
@@ -117,6 +135,7 @@ export function createCore(deps: CoreDeps): Core {
       const clientSecret = await deps.secret.get();
       if (!clientId || !clientSecret) throw new Error("Credentials are not saved.");
       const result = await authenticate({ clientId, clientSecret });
+      if (result === "refused") await writeMeta(REFUSED_KEY, "1");
       if (typeof result === "string") throw new Error(`Pluggy authentication failed (${result}).`);
       apiKey = { value: result.apiKey, expiresAt: deps.clock() + config.apiKeyTtlMs };
     }
@@ -144,6 +163,7 @@ export function createCore(deps: CoreDeps): Core {
     clock: deps.clock,
     sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     request,
+    credentialsRefused,
   });
 
   const networth = createNetWorth({ db, clock: deps.clock });
@@ -157,6 +177,7 @@ export function createCore(deps: CoreDeps): Core {
     request,
     onLock: diagnostics.recordLock,
     moveEdits: classification.moveEdits,
+    credentialsRefused,
   });
 
   const summary = createSummary({ db, clock: deps.clock, classify: classification.classify });
@@ -181,6 +202,31 @@ export function createCore(deps: CoreDeps): Core {
       return clientId && secret ? { saved: true, clientId } : { saved: false };
     },
 
+    credentialsRefused,
+
+    async updateClientSecret(secret) {
+      const clientId = await readMeta(CLIENT_ID_KEY);
+      const clientSecret = secret.trim();
+      if (!clientId || !clientSecret) return failure("missing");
+      const result = await authenticate({ clientId, clientSecret });
+      if (typeof result === "string") return failure(result);
+      await deps.secret.set(clientSecret);
+      await db.delete(appMeta).where(eq(appMeta.key, REFUSED_KEY));
+      apiKey = { value: result.apiKey, expiresAt: deps.clock() + config.apiKeyTtlMs };
+      return { ok: true };
+    },
+
+    async notices() {
+      const sources = await connections.listConnections();
+      const snoozes = await readSnoozes(db);
+      return buildNotices(await credentialsRefused(), sources, (key) => snoozes.get(key) ?? 0, deps.clock());
+    },
+
+    async snoozeNotice(key) {
+      if (key === "credentials") return;
+      await writeMeta(snoozeKey(key), String(deps.clock() + SNOOZE_MS));
+    },
+
     async saveCredentials(input) {
       const clientId = input.clientId.trim();
       const clientSecret = input.clientSecret.trim();
@@ -191,6 +237,7 @@ export function createCore(deps: CoreDeps): Core {
 
       await deps.secret.set(clientSecret);
       await writeMeta(CLIENT_ID_KEY, clientId);
+      await db.delete(appMeta).where(eq(appMeta.key, REFUSED_KEY));
       apiKey = { value: result.apiKey, expiresAt: deps.clock() + config.apiKeyTtlMs };
       return { ok: true };
     },
