@@ -7,10 +7,12 @@ import { account, appMeta, bankTransaction, bill, connection, identity, investme
 import { createClassification, type ClassificationApi } from "./classification";
 import { createConnections, type ConnectionsApi } from "./connections";
 import { createSync, type SyncApi } from "./sync";
+import { createEstimate } from "./estimate";
 import { createNetWorth, type NetWorthApi } from "./networth";
 import { createSummary, type SummaryApi } from "./summary";
 import { createBills, type BillsApi } from "./bills";
 import { createDiagnostics, type DiagnosticEnv } from "./diagnostic";
+import { createLock, type LockApi } from "./lock";
 import { buildNotices, readSnoozes, REFUSED_KEY, snoozeKey, SNOOZE_MS, type NoticeQueue } from "./status";
 
 /** Works with both the sync (expo-sqlite) and async drivers: every query is awaited. */
@@ -33,6 +35,8 @@ export interface CoreDeps {
   sleep?: (ms: number) => Promise<void>;
   /** App and OTA update versions, for the diagnostic. */
   env?: DiagnosticEnv;
+  /** Whether the phone has a screen lock (biometric or PIN) to unlock the app with. */
+  deviceHasLock?: () => Promise<boolean>;
 }
 
 export interface Credentials {
@@ -71,6 +75,8 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
    * The rules and the hand edits stay.
    */
   switchApplication(): Promise<void>;
+  /** Bloqueio por biometria: when to prompt, and the Segurança switch. */
+  lock: LockApi;
   /** Do sistema (the default), Claro or Escuro. */
   appearance(): Promise<Appearance>;
   setAppearance(value: Appearance): Promise<void>;
@@ -82,6 +88,7 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
 
 const CLIENT_ID_KEY = "pluggy.clientId";
 const APPEARANCE_KEY = "appearance";
+const LOCK_KEY = "lock.enabled";
 
 export function createCore(deps: CoreDeps): Core {
   const { db, config } = deps;
@@ -183,7 +190,10 @@ export function createCore(deps: CoreDeps): Core {
 
   const networth = createNetWorth({ db, clock: deps.clock });
 
+  const estimate = createEstimate({ db, fetch: deps.fetch, clock: deps.clock });
+
   const sync = createSync({
+    estimate: estimate.run,
     takeSnapshot: networth.takeSnapshot,
     db,
     config,
@@ -197,7 +207,16 @@ export function createCore(deps: CoreDeps): Core {
 
   const summary = createSummary({ db, clock: deps.clock, classify: classification.classify });
 
+  const lock = createLock({
+    clock: deps.clock,
+    readEnabled: async () => (await readMeta(LOCK_KEY)) !== "0",
+    writeEnabled: (enabled) => writeMeta(LOCK_KEY, enabled ? "1" : "0"),
+    deviceHasLock: deps.deviceHasLock ?? (async () => true),
+    credentialsSaved: async () => (await readMeta(CLIENT_ID_KEY)) !== null && (await deps.secret.get()) !== null,
+  });
+
   return {
+    lock,
     ...connections,
     ...summary,
     billGaps: bills.billGaps,

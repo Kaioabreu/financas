@@ -83,7 +83,7 @@ export class FakeSecretStore {
   };
 }
 
-export async function createTestWorld(options: { config?: Partial<EmbeddedConfig>; startAt?: string; env?: { appVersion: string; otaId: string | null } } = {}) {
+export async function createTestWorld(options: { config?: Partial<EmbeddedConfig>; startAt?: string; env?: { appVersion: string; otaId: string | null }; deviceHasLock?: boolean } = {}) {
   const sqlite = new DatabaseSync(":memory:");
   const db = drizzle(
     async (sql, params, method) => {
@@ -125,6 +125,7 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
       sleep: async (ms) => clock.advance(ms),
       config: { ...embeddedConfig, ...options.config, ...override },
       env: options.env,
+      deviceHasLock: async () => options.deviceHasLock ?? true,
     });
   return { core: build(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>) => build(config), fetch: fake, clock, secret };
 }
