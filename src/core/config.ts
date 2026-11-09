@@ -84,6 +84,7 @@ export const embeddedConfig: EmbeddedConfig = {
     { contains: "IOF DE COMPRA INTERNACIONAL", nature: "expense", category: "fees-taxes" },
     { contains: "DESCONTO NA PARCELA", direction: "credit", nature: "refund" },
     { contains: "CANC PARCELA", direction: "credit", nature: "refund" },
+    { contains: "CANCELAMENTO PARCIAL DE COMPRA", direction: "credit", nature: "refund" },
   ],
   categoryMap: {
     groceries: "groceries", supermarket: "groceries", mercado: "groceries", supermercado: "groceries",

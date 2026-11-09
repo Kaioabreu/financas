@@ -5,6 +5,7 @@ import { and, desc, eq, lte } from "drizzle-orm";
 import { account, bankTransaction, bill, connection, investment, snapshot } from "../db/schema";
 import { isExpired } from "./connections";
 import type { CoreDatabase } from "./createCore";
+import { buildInstallmentPlan } from "./installments";
 
 export type AssetClass = "cash" | "fixedIncome" | "equity" | "funds" | "other";
 export const ASSET_CLASSES: AssetClass[] = ["cash", "fixedIncome", "equity", "funds", "other"];
@@ -130,10 +131,11 @@ export function createNetWorth(deps: Deps) {
         paid.add(b.id); // Pluggy did not report payments: a bill past its due date is taken as paid
       }
     }
+    const plan = await buildInstallmentPlan(db);
     let owed = 0;
     for (const t of await db.select().from(bankTransaction).where(eq(bankTransaction.accountId, accountId))) {
-      if (t.date.slice(0, 10) > today) continue;
-      const billId = parse(t.extra).creditCardMetadata?.billId;
+      if (plan.dateOf(t.id, t.date) > today) continue;
+      const billId = plan.byId.get(t.id)?.billId ?? parse(t.extra).creditCardMetadata?.billId;
       if (billId && paid.has(billId)) continue;
       const amount = t.amountInAccountCurrency ?? t.amount;
       const credit = t.type ? t.type === "CREDIT" : amount < 0;

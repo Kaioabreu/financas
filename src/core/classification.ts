@@ -3,7 +3,8 @@
 // so an OTA update of the built-in rules reclassifies everything without reading Pluggy again.
 // Precedence: manual edit > user rule > built-in rule > deduction > Pluggy's category > Outros.
 import { eq, inArray } from "drizzle-orm";
-import { account, appMeta, bankTransaction, identity, manualEdit, userRule } from "../db/schema";
+import { account, appMeta, bankTransaction, identity, installmentEdit, manualEdit, userRule } from "../db/schema";
+import { buildInstallmentPlan, type InstallmentPlan } from "./installments";
 import type { BuiltInRule, EmbeddedConfig } from "./config";
 import type { CoreDatabase } from "./createCore";
 
@@ -122,6 +123,10 @@ interface Context {
   /** Newest first. */
   userRules: UserRule[];
   edits: Map<string, Classification>;
+  /** Hand edits that hold for a whole compra parcelada, by group. */
+  groupEdits: Map<string, Classification>;
+  plan: InstallmentPlan;
+  rows: Map<string, Row>;
 }
 
 const isCredit = (r: Row) => (r.type ? r.type === "CREDIT" : r.card ? r.amount < 0 : r.amount > 0);
@@ -154,9 +159,12 @@ const ruleCatches = (contains: string, description: string) => normalizeText(des
 function classifyRow(r: Row, ctx: Context): ClassifiedAs {
   const edit = ctx.edits.get(r.id);
   if (edit) return { ...edit, source: "manual" };
+  const entry = ctx.plan.byId.get(r.id);
+  const groupEdit = entry?.installment ? ctx.groupEdits.get(entry.installment.groupKey) : undefined;
+  if (groupEdit) return { ...groupEdit, source: "manual" };
   const base = autoClassify(r, ctx);
   const rule = ctx.userRules.find((u) => ruleCatches(u.contains, r.description));
-  if (!rule) return base;
+  if (!rule) return entry?.creditOf ? settlementOf(base, entry.creditOf, ctx) : base;
   const nature = rule.nature ?? base.nature;
   const out: ClassifiedAs = { nature, source: "rule" };
   if (nature === "expense") out.category = rule.category ?? base.category ?? "other";
@@ -165,6 +173,14 @@ function classifyRow(r: Row, ctx: Context): ClassifiedAs {
     if (category) out.category = category;
   } else if (nature === "income") out.origin = rule.origin ?? base.origin ?? "other-income";
   return out;
+}
+
+/** The credit that settled parcels is a refund with the category of the purchase. */
+function settlementOf(base: ClassifiedAs, groupKey: string, ctx: Context): ClassifiedAs {
+  if (base.nature !== "refund") return base;
+  const member = ctx.rows.get(ctx.plan.groups.get(groupKey)?.[0] ?? "");
+  const purchase = member ? classifyRow(member, ctx) : null;
+  return purchase?.nature === "expense" && purchase.category ? { ...base, category: purchase.category } : base;
 }
 
 function autoClassify(r: Row, ctx: Context): ClassifiedAs {
@@ -339,6 +355,15 @@ export function createClassification(deps: ClassificationDeps) {
       const [tx] = await db.select().from(bankTransaction).where(eq(bankTransaction.id, id));
       if (!tx) return;
       const c = tidy(classification);
+      const group = (await buildInstallmentPlan(db)).byId.get(id)?.installment?.groupKey;
+      if (group) {
+        const plan = await buildInstallmentPlan(db);
+        const set = { nature: c.nature, category: c.category ?? null, origin: c.origin ?? null };
+        await db.insert(installmentEdit).values({ groupKey: group, ...set }).onConflictDoUpdate({ target: installmentEdit.groupKey, set });
+        const members = plan.groups.get(group) ?? [];
+        if (members.length) await db.delete(manualEdit).where(inArray(manualEdit.transactionId, members));
+        return;
+      }
       const values = {
         transactionId: id,
         accountId: tx.accountId,
@@ -417,6 +442,14 @@ export function createClassification(deps: ClassificationDeps) {
         employerDocs: await employerDocs(),
         matchedBillPayments: matchBillPayments(rows),
         userRules: await loadUserRules(),
+        plan: await buildInstallmentPlan(db),
+        rows: new Map(),
+        groupEdits: new Map(
+          (await db.select().from(installmentEdit)).map((e) => [
+            e.groupKey,
+            tidy({ nature: e.nature as Nature, category: (e.category ?? undefined) as AppCategory | undefined, origin: (e.origin ?? undefined) as IncomeOrigin | undefined }),
+          ]),
+        ),
         edits: new Map(
           (await db.select().from(manualEdit)).map((e) => [
             e.transactionId,
@@ -425,6 +458,7 @@ export function createClassification(deps: ClassificationDeps) {
         ),
       };
       const wanted = new Set(ids);
+      ctx.rows = new Map(rows.map((r) => [r.id, r]));
       return new Map(rows.filter((r) => wanted.has(r.id)).map((r) => [r.id, classifyRow(r, ctx)]));
     },
   };

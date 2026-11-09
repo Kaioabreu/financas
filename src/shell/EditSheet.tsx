@@ -90,6 +90,11 @@ export function EditSheet({ row, onClose }: { row: TransactionRow | null; onClos
                 <Fine>
                   {row.date.split("-").reverse().join("/")} · {row.accountName}
                 </Fine>
+                {row.installment ? (
+                  <Fine>
+                    Parcela {row.installment.number} de {row.installment.total} · compra de {row.purchaseDate?.split("-").reverse().join("/")}. Mudar a classificação vale para a compra inteira.
+                  </Fine>
+                ) : null}
                 <Fine>Classificação: {sourceLabel[row.source]}</Fine>
 
                 <Text style={label}>Natureza</Text>
