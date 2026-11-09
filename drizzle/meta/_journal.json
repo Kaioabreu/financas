@@ -43,6 +43,13 @@
       "when": 1794260311086,
       "tag": "0005_curious_bruce_banner",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794260559810,
+      "tag": "0006_organic_princess_powerful",
+      "breakpoints": true
     }
   ]
 }

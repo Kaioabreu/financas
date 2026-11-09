@@ -4,6 +4,7 @@ import { account, bankTransaction, bill, connection, identity, investment, inves
 import type { Classification, ClassificationSource, ClassifiedAs } from "./classification";
 import type { EmbeddedConfig } from "./config";
 import type { CoreDatabase } from "./createCore";
+import { buildInstallmentPlan } from "./installments";
 import { dayLabel, deriveStatus, type ConnectionStatus } from "./status";
 
 export type ConnectErrorKind = "limit" | "offline" | "unexpected";
@@ -75,6 +76,10 @@ export interface TransactionRow {
   accountId: string;
   /** The account's name, as Pluggy sent it. */
   accountName: string;
+  /** "k de N", for a parcela of a compra parcelada. */
+  installment?: { number: number; total: number };
+  /** YYYY-MM-DD: the day of the purchase, for a parcela. */
+  purchaseDate?: string;
 }
 
 export interface ConnectionsApi {
@@ -341,12 +346,11 @@ export function createConnections(deps: Deps): ConnectionsApi {
     },
 
     async listTransactions({ accountId, month, category, days }) {
-      const monthRows = like(bankTransaction.date, `${month}-%`);
-      const rows = await db
-        .select()
-        .from(bankTransaction)
-        .where(accountId ? and(eq(bankTransaction.accountId, accountId), monthRows) : monthRows)
-        .orderBy(desc(bankTransaction.date));
+      // The month is the one the transaction counts in, not the one Pluggy dated it.
+      const plan = await buildInstallmentPlan(db);
+      const rows = (await (accountId ? db.select().from(bankTransaction).where(eq(bankTransaction.accountId, accountId)) : db.select().from(bankTransaction)))
+        .filter((r) => plan.dateOf(r.id, r.date).startsWith(`${month}-`))
+        .sort((a, b) => plan.dateOf(b.id, b.date).localeCompare(plan.dateOf(a.id, a.date)));
       const classes = await deps.classify(rows.map((r) => r.id));
       const owners = new Map((await db.select().from(account)).map((a) => [a.id, a.name]));
       const filtered = Boolean(category || days);
@@ -354,7 +358,10 @@ export function createConnections(deps: Deps): ConnectionsApi {
         .map((r) => ({
           id: r.id,
           description: r.description,
-          date: r.date.slice(0, 10),
+          date: plan.dateOf(r.id, r.date),
+          ...(plan.byId.get(r.id)?.installment
+            ? { installment: { number: plan.byId.get(r.id)!.installment!.number, total: plan.byId.get(r.id)!.installment!.total }, purchaseDate: plan.byId.get(r.id)!.installment!.purchaseDate }
+            : {}),
           amount: r.amountInAccountCurrency ?? r.amount,
           accountId: r.accountId,
           accountName: owners.get(r.accountId) ?? "",

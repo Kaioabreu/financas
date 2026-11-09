@@ -154,3 +154,11 @@ export const snapshot = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.date, t.itemId] })],
 );
+
+/** A classification set by hand on a compra parcelada: it holds for every parcel, future ones too. */
+export const installmentEdit = sqliteTable("installment_edit", {
+  groupKey: text("group_key").primaryKey(),
+  nature: text("nature").notNull(),
+  category: text("category"),
+  origin: text("origin"),
+});

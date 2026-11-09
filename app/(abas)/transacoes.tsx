@@ -146,7 +146,8 @@ export default function Transacoes() {
             <View style={{ flex: 1 }}>
               <Body>{item.description}</Body>
               <Fine>
-                {item.date.split("-").reverse().join("/")} · {natureLabel[item.nature]}
+                {item.date.split("-").reverse().join("/")}
+                {item.installment ? ` · ${item.installment.number} de ${item.installment.total}` : ""} · {natureLabel[item.nature]}
                 {item.category ? ` · ${categoryLabel[item.category].icon} ${categoryLabel[item.category].name}` : ""}
                 {item.origin ? ` · ${originLabel[item.origin]}` : ""}
               </Fine>
