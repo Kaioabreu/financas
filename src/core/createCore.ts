@@ -1,9 +1,9 @@
 // Core: pure TypeScript, no React Native / Expo imports.
 // The shell hands it a database, fetch, clock, the secret store and the embedded config.
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import type { EmbeddedConfig } from "./config";
-import { appMeta } from "../db/schema";
+import { account, appMeta, bankTransaction, bill, connection, identity, investment, investmentTransaction, snapshot } from "../db/schema";
 import { createClassification, type ClassificationApi } from "./classification";
 import { createConnections, type ConnectionsApi } from "./connections";
 import { createSync, type SyncApi } from "./sync";
@@ -51,6 +51,8 @@ export interface CredentialsError {
 export type SaveCredentialsResult = { ok: true } | { ok: false; error: CredentialsError };
 export type CredentialsStatus = { saved: false } | { saved: true; clientId: string };
 
+export type Appearance = "system" | "light" | "dark";
+
 export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, SummaryApi, NetWorthApi {
   /** The "Copiar diagnóstico" text: only allow-listed facts, never amounts, names or ids. */
   diagnostic(): Promise<string>;
@@ -63,6 +65,14 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
   notices(): Promise<NoticeQueue>;
   /** "Agora não": hides a notice for 30 days. Rejected credentials cannot be snoozed. */
   snoozeNotice(key: string): Promise<void>;
+  /**
+   * "Trocar de aplicação": erases the Connections and the downloaded data and forgets the credentials.
+   * The rules and the hand edits stay.
+   */
+  switchApplication(): Promise<void>;
+  /** Do sistema (the default), Claro or Escuro. */
+  appearance(): Promise<Appearance>;
+  setAppearance(value: Appearance): Promise<void>;
   /** Checks the credentials with Pluggy (POST /auth) and saves them only on a 200. */
   saveCredentials(input: Credentials): Promise<SaveCredentialsResult>;
   /** An authenticated call to Pluggy; the apiKey is kept in memory and renewed after 2 h. */
@@ -70,6 +80,7 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
 }
 
 const CLIENT_ID_KEY = "pluggy.clientId";
+const APPEARANCE_KEY = "appearance";
 
 export function createCore(deps: CoreDeps): Core {
   const { db, config } = deps;
@@ -225,6 +236,26 @@ export function createCore(deps: CoreDeps): Core {
     async snoozeNotice(key) {
       if (key === "credentials") return;
       await writeMeta(snoozeKey(key), String(deps.clock() + SNOOZE_MS));
+    },
+
+    async switchApplication() {
+      for (const table of [bankTransaction, bill, investmentTransaction, investment, account, identity, snapshot, connection]) {
+        await db.delete(table);
+      }
+      await db.delete(appMeta).where(eq(appMeta.key, CLIENT_ID_KEY));
+      await db.delete(appMeta).where(eq(appMeta.key, REFUSED_KEY));
+      await db.delete(appMeta).where(like(appMeta.key, `${snoozeKey("")}%`));
+      await deps.secret.delete();
+      apiKey = null;
+    },
+
+    async appearance() {
+      const value = await readMeta(APPEARANCE_KEY);
+      return value === "light" || value === "dark" ? value : "system";
+    },
+
+    async setAppearance(value) {
+      await writeMeta(APPEARANCE_KEY, value);
     },
 
     async saveCredentials(input) {

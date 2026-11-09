@@ -53,6 +53,11 @@ export default function Resumo() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>
+      <View style={{ position: "absolute", top: insets.top + 12, right: 16, zIndex: 2 }}>
+        <Pressable onPress={() => router.push("/configuracoes")} accessibilityRole="button" accessibilityLabel="Configurações" hitSlop={10}>
+          <Text style={{ fontSize: 22, color: c.ink2 }}>⚙</Text>
+        </Pressable>
+      </View>
       <MonthBar />
       <StatusLine
         connections={connections}
