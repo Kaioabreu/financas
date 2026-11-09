@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTÓTIPO #14: Pluggy Connect × MeuPluggy</title>
+<script src="https://cdn.pluggy.ai/pluggy-connect/v2.11.0/pluggy-connect.js"></script>
+<style>
+  body { font: 14px/1.45 system-ui, sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #111; }
+  .banner { background: #fff3cd; border: 1px solid #e0c060; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  section { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  button { font: inherit; padding: 6px 12px; cursor: pointer; }
+  label { display: block; margin: 4px 0; }
+  input[type=text] { width: 100%; box-sizing: border-box; font: inherit; padding: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  td, th { border-bottom: 1px solid #eee; padding: 4px; text-align: left; vertical-align: top; }
+  #log { font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; max-height: 420px; overflow: auto; background: #111; color: #ddd; padding: 8px; border-radius: 6px; }
+  .muted { color: #666; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="banner"><b>PROTÓTIPO DESCARTÁVEL</b> do ticket #14. A pergunta: o widget Pluggy Connect, aberto com um connect token das <b>suas</b> credenciais, autoriza o conector MeuPluggy (200), devolve o itemId e renova a autorização? Nada fica salvo.</div>
+
+<div class="grid">
+  <section>
+    <h2>A. Conectar pelo widget</h2>
+    <p class="muted">Abre o Connect já no conector 200 e espera o <code>onSuccess</code> com o <code>item.id</code>.</p>
+    <label><input type="checkbox" id="a-avoid"> <code>avoidDuplicates</code> no token</label>
+    <label>oauthRedirectUri (opcional, HTTPS): <input type="text" id="a-redirect" placeholder="vazio = sem redirect"></label>
+    <button id="a-go">Abrir widget (criar item)</button>
+  </section>
+
+  <section>
+    <h2>B. Renovar pelo widget (<code>updateItem</code>)</h2>
+    <p class="muted">Token com o <code>itemId</code> e o widget com <code>updateItem</code>. Observe se o id volta igual e se o <code>consentExpiresAt</code> anda.</p>
+    <label>Item: <select id="b-item"></select></label>
+    <label><input type="checkbox" id="b-force"> <code>forceAskForCredentials</code></label>
+    <label><input type="checkbox" id="b-filters"> filtrar no conector 200 (<code>connectorIds</code>/<code>selectedConnectorId</code>)</label>
+    <button id="b-go" disabled>Abrir widget (renovar item)</button>
+  </section>
+
+  <section>
+    <h2>C. Conectar sem widget (API + navegador)</h2>
+    <p class="muted"><code>POST /items</code> com o conector 200, abre a URL de OAuth numa aba e consulta o item a cada 3 s. É o caminho que dispensaria o SDK do widget no React Native.</p>
+    <label>oauthRedirectUri (opcional): <input type="text" id="c-redirect" placeholder="vazio = sem redirect"></label>
+    <button id="c-go">Criar item pela API</button>
+    <div id="c-out" class="muted"></div>
+  </section>
+</div>
+
+<section style="margin-top:12px">
+  <h2>Itens conhecidos <button id="refresh" style="font-size:12px">atualizar</button></h2>
+  <table><thead><tr><th>id</th><th>origem</th><th>banco</th><th>status</th><th>criado</th><th>consentExpiresAt</th><th>parameter / erro</th></tr></thead><tbody id="items"></tbody></table>
+</section>
+
+<section style="margin-top:12px">
+  <h2>Log (eventos do widget e da API)</h2>
+  <div id="log"></div>
+</section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const short = (id) => id ? id.slice(0, 8) + "…" : "";
+const summarizeItem = (it) => it && {
+  id: it.id, status: it.status, executionStatus: it.executionStatus,
+  connector: it.connector && `${it.connector.id} ${it.connector.name}`,
+  createdAt: it.createdAt, consentExpiresAt: it.consentExpiresAt,
+  statusDetail: it.statusDetail, error: it.error, parameter: it.parameter,
+};
+function log(kind, data) {
+  const line = `${new Date().toLocaleTimeString()}  ${kind}  ${data === undefined ? "" : JSON.stringify(data)}`;
+  $("log").textContent = line + "\n" + $("log").textContent;
+  fetch("/api/log", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, data }) });
+}
+const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }).then((r) => r.json().then((j) => ({ status: r.status, body: j })));
+
+async function refreshItems() {
+  const items = await fetch("/api/items").then((r) => r.json());
+  $("items").innerHTML = items.map((it) => `<tr>
+    <td title="${it.id}">${short(it.id)}</td><td>${it.origin}</td><td>${it.bank || ""}<br><span class="muted">${(it.accounts || []).join(", ")}</span></td>
+    <td>${it.status || it.httpStatus}<br><span class="muted">${it.executionStatus || ""}</span></td>
+    <td>${(it.createdAt || "").replace("T", " ").slice(0, 19)}</td><td>${(it.consentExpiresAt || "").slice(0, 19)}</td>
+    <td class="muted">${it.parameter ? JSON.stringify(it.parameter).slice(0, 120) : ""}${it.error ? JSON.stringify(it.error) : ""}</td></tr>`).join("");
+  const sel = $("b-item"), cur = sel.value;
+  sel.innerHTML = items.map((it) => `<option value="${it.id}">${short(it.id)} ${it.bank || ""} (${it.origin})</option>`).join("");
+  if (cur) sel.value = cur;
+  $("b-go").disabled = !sel.value;
+  return items;
+}
+
+function openWidget({ connectToken, extra, label, filters = true }) {
+  const config = {
+    connectToken, ...(filters ? { connectorIds: [200], selectedConnectorId: 200 } : {}), ...extra,
+    onOpen: () => log(`${label} onOpen`),
+    onClose: () => { log(`${label} onClose`); refreshItems(); },
+    onEvent: (p) => log(`${label} onEvent`, p && p.item ? { ...p, item: summarizeItem(p.item) } : p),
+    onSuccess: async ({ item }) => {
+      log(`${label} onSuccess`, summarizeItem(item));
+      await post("/api/remember", { itemId: item.id });
+      refreshItems();
+    },
+    onError: (e) => log(`${label} onError`, { message: e.message, item: summarizeItem(e.data && e.data.item) }),
+  };
+  log(`${label} config`, { ...config, connectToken: "<token>" });
+  new PluggyConnect(config).init();
+}
+
+$("a-go").onclick = async () => {
+  const opts = { avoidDuplicates: $("a-avoid").checked, oauthRedirectUri: $("a-redirect").value.trim() };
+  const t = await post("/api/connect-token", opts);
+  log("A token", { http: t.status, ok: !!t.body.accessToken, error: t.body.accessToken ? undefined : t.body });
+  if (t.body.accessToken) openWidget({ connectToken: t.body.accessToken, extra: {}, label: "A" });
+};
+
+$("b-go").onclick = async () => {
+  const itemId = $("b-item").value;
+  if (!itemId) { log("B ignorado: a lista de itens ainda não carregou"); return; }
+  const before = await fetch(`/api/items/${itemId}`).then((r) => r.json());
+  log("B antes", { id: before.id, status: before.status, consentExpiresAt: before.consentExpiresAt, updatedAt: before.updatedAt });
+  const t = await post("/api/connect-token", { itemId });
+  log("B token", { http: t.status, ok: !!t.body.accessToken, error: t.body.accessToken ? undefined : t.body });
+  if (t.body.accessToken) openWidget({ connectToken: t.body.accessToken, extra: { updateItem: itemId, forceAskForCredentials: $("b-force").checked }, label: "B", filters: $("b-filters").checked });
+};
+
+$("c-go").onclick = async () => {
+  const r = await post("/api/create-item", { oauthRedirectUri: $("c-redirect").value.trim() });
+  log("C POST /items", { http: r.status, item: summarizeItem(r.body), raw: r.body.id ? undefined : r.body });
+  if (!r.body.id) return;
+  const id = r.body.id;
+  let opened = false;
+  const tick = async () => {
+    const it = await fetch(`/api/items/${id}`).then((x) => x.json());
+    const url = it.parameter && it.parameter.data;
+    $("c-out").innerHTML = `item ${short(id)}: <b>${it.status}</b> / ${it.executionStatus || ""}` +
+      (url ? `<br><a href="${url}" target="_blank" rel="noopener">abrir login do Meu Pluggy</a>` : "");
+    if (url && !opened) { opened = true; log("C oauth url", { parameter: { ...it.parameter, data: url.slice(0, 80) + "…" } }); }
+    if (["UPDATED", "LOGIN_ERROR", "OUTDATED"].includes(it.status) && it.executionStatus !== "CREATING") {
+      log("C final", it); refreshItems(); return;
+    }
+    setTimeout(tick, 3000);
+  };
+  tick();
+};
+
+$("refresh").onclick = refreshItems;
+refreshItems();
+log("pronto", { sdk: typeof PluggyConnect });
+</script>
+</body>
+</html>
