@@ -92,6 +92,12 @@ export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, Summar
   verifyBackupPassword(password: string): Promise<boolean>;
   /** Marks a Backup as just made ("Último backup"). */
   recordBackup(): Promise<void>;
+  /**
+   * "Apagar tudo", Pluggy half: tries DELETE /items/{id} on every Connection and carries on when one
+   * fails. Returns how many failed (404, an item already gone, counts as erased). The shell then
+   * erases the database, the SecureStore and the temporary backup file.
+   */
+  eraseAtPluggy(): Promise<{ failed: number }>;
   /** Bloqueio por biometria: when to prompt, and the Segurança switch. */
   lock: LockApi;
   /** Do sistema (the default), Claro or Escuro. */
@@ -316,6 +322,19 @@ export function createCore(deps: CoreDeps): Core {
       await db.delete(appMeta).where(like(appMeta.key, `${snoozeKey("")}%`));
       await deps.secret.delete();
       apiKey = null;
+    },
+
+    async eraseAtPluggy() {
+      let failed = 0;
+      for (const { itemId } of await connections.listConnections()) {
+        try {
+          const response = await request("DELETE", `/items/${itemId}`);
+          if (!response.ok && response.status !== 404) failed++;
+        } catch {
+          failed++;
+        }
+      }
+      return { failed };
     },
 
     async appearance() {

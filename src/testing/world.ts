@@ -60,6 +60,7 @@ export class FakeFetch {
 }
 
 function jsonResponse({ status = 200, body = {}, headers = {} }: FakeResponse): Response {
+  if (status === 204) return new Response(null, { status, headers });
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 }
 

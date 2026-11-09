@@ -23,7 +23,7 @@ export function SettingsScreen({ title, sub, children, footer }: { title: string
 }
 
 /** A tappable line of a settings list. */
-export function SettingsRow({ label, value, onPress }: { label: string; value?: string; onPress: () => void }) {
+export function SettingsRow({ label, value, onPress, danger }: { label: string; value?: string; onPress: () => void; danger?: boolean }) {
   const c = usePalette();
   return (
     <Pressable
@@ -31,7 +31,7 @@ export function SettingsRow({ label, value, onPress }: { label: string; value?: 
       accessibilityRole="button"
       style={{ paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: c.rule, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
     >
-      <Text style={{ fontFamily: font.medium, fontSize: 17, color: c.ink }}>{label}</Text>
+      <Text style={{ fontFamily: font.medium, fontSize: 17, color: danger ? c.neg : c.ink }}>{label}</Text>
       {value ? <Fine>{value}</Fine> : <Text style={{ color: c.ink2, fontSize: 18 }}>›</Text>}
     </Pressable>
   );
