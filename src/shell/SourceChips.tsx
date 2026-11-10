@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text } from "react-native";
 import type { AccountSummary } from "../core/connections";
 import { sourceLabel } from "./sourceLabel";
 import { font, usePalette } from "./theme";
@@ -11,7 +11,13 @@ export function SourceChips({ accounts, selected, onToggle }: { accounts: Accoun
   const c = usePalette();
   if (accounts.length < 2) return null;
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12, paddingHorizontal: 24 }}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      // flexShrink 0: a ScrollView shrinks by default and would clip the chips vertically.
+      style={{ flexGrow: 0, flexShrink: 0, marginTop: 12 }}
+      contentContainerStyle={{ paddingHorizontal: 24, gap: 8 }}
+    >
       {accounts.map((a) => {
         const on = selected.includes(a.id);
         return (
@@ -20,12 +26,15 @@ export function SourceChips({ accounts, selected, onToggle }: { accounts: Accoun
             onPress={() => onToggle(a.id)}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            style={{ backgroundColor: on ? c.ink : c.track, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}
+            // flexShrink 0: the chip is as wide as its text, so a name is never cut or squeezed.
+            style={{ flexShrink: 0, backgroundColor: on ? c.ink : c.track, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}
           >
-            <Text style={{ fontFamily: font.medium, fontSize: 14, color: on ? c.bg : c.ink }}>{sourceLabel(a)}</Text>
+            <Text numberOfLines={1} style={{ fontFamily: font.medium, fontSize: 14, color: on ? c.bg : c.ink }}>
+              {sourceLabel(a)}
+            </Text>
           </Pressable>
         );
       })}
-    </View>
+    </ScrollView>
   );
 }
