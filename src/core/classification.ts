@@ -275,12 +275,6 @@ export function createClassification(deps: ClassificationDeps) {
           const d = digits(link?.employerDocument);
           if (d) docs.add(d);
         }
-        // The company CNPJ the holder declared also counts, for banks that bring no paycheck link.
-        const companies = Array.isArray(extra.companiesCnpj) ? extra.companiesCnpj : [];
-        for (const cnpj of [...companies, extra.qualifications?.companyCnpj]) {
-          const d = digits(cnpj);
-          if (d.length === 14) docs.add(d);
-        }
       } catch {
         // an unreadable Identity just brings no employer
       }

@@ -195,21 +195,23 @@ describe("Classificação: salário", () => {
     expect(rows["BOLETO EMPREGADOR"]).toMatchObject({ nature: "income", origin: "other-income" });
   });
 
-  it("o formato real do banco (TRANSFERENCIA_MESMA_INSTITUICAO, descrição InternalTransfer) também é Salário", async () => {
-    const w = await world({ identity: paycheck });
+  it("o formato real (TRANSFERENCIA_MESMA_INSTITUICAO, descrição InternalTransfer) é Salário mesmo quando o empregador é o próprio banco", async () => {
+    // The user works at the connected bank: employerDocument equals the bank's own CNPJ.
+    const w = await world({
+      identity: [
+        identity({
+          document: USER_CPF,
+          companiesCnpj: [EMPLOYER],
+          financialRelationships: { paychecksBankLink: [{ employerDocument: EMPLOYER, paycheckBankCnpj: EMPLOYER }] },
+        }),
+      ],
+    });
     const rows = await w.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")]);
     expect(rows.InternalTransfer).toMatchObject({ nature: "income", origin: "salary" });
   });
 
-  it("sem paychecksBankLink, o CNPJ da empresa em companiesCnpj ou qualifications.companyCnpj vale como empregador", async () => {
-    const viaCompanies = await world({ identity: [identity({ document: USER_CPF, companiesCnpj: [EMPLOYER] })] });
-    expect((await viaCompanies.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")])).InternalTransfer.origin).toBe("salary");
-    const viaQualifications = await world({ identity: [identity({ document: USER_CPF, qualifications: { companyCnpj: EMPLOYER } })] });
-    expect((await viaQualifications.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")])).InternalTransfer.origin).toBe("salary");
-  });
-
-  it("se o /identity não traz nenhum CNPJ, a entrada de empresa fica em Outras receitas (e o usuário pode criar uma regra)", async () => {
-    const w = await world();
+  it("companiesCnpj sozinho não faz o pagador virar empregador; sem paychecksBankLink a entrada fica em Outras receitas", async () => {
+    const w = await world({ identity: [identity({ document: USER_CPF, companiesCnpj: [EMPLOYER] })] });
     const rows = await w.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")]);
     expect(rows.InternalTransfer).toMatchObject({ nature: "income", origin: "other-income" });
   });
