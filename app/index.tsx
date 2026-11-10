@@ -1,19 +1,17 @@
 import { Redirect, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import type { ConnectionSummary } from "../src/core/connections";
 import { useLiveData } from "../src/shell/useLiveData";
 import { useCore } from "../src/shell/appCore";
-import { Body, Button, Fine, font, Screen, usePalette } from "../src/shell/theme";
-
-const MAX_BANKS = 5;
+import { Body, Button, Screen, usePalette } from "../src/shell/theme";
 
 export default function Entry() {
   const core = useCore();
   const router = useRouter();
   const c = usePalette();
   const [saved, setSaved] = useState<boolean | null>(null);
-  const [connections, setConnections] = useState<ConnectionSummary[]>([]);
+  const [connections, setConnections] = useState<ConnectionSummary[] | null>(null);
 
   useEffect(() => {
     core.credentialsStatus().then((s) => setSaved(s.saved));
@@ -33,32 +31,19 @@ export default function Entry() {
   if (saved === null) return <View style={{ flex: 1, backgroundColor: c.bg }} />;
   // Leaving before saving brings the user back to the Boas-vindas, with nothing stored.
   if (!saved) return <Redirect href="/boas-vindas" />;
+  // Connections still loading: keep the blank screen so the first frame never flashes the wrong one.
+  if (connections === null) return <View style={{ flex: 1, backgroundColor: c.bg }} />;
+  // With at least one Connection the app opens straight on Resumo; Conexões lives in Configurações.
+  if (connections.length > 0) return <Redirect href="/resumo" />;
 
-  const hasAny = connections.length > 0;
+  // Only the first time (or after every bank was removed) reaches here.
   return (
     <Screen
-      title={hasAny ? "Conexões" : "Conecte um banco"}
-      sub={hasAny ? undefined : "Seus dados aparecem aqui depois da primeira leitura."}
-      footer={
-        <>
-          {hasAny ? <Button label="Ver meus dados" onPress={() => router.push("/resumo")} /> : null}
-          <Button
-            label={hasAny ? `Conectar outro banco · ${connections.length} de ${MAX_BANKS}` : "Conectar um banco"}
-            secondary={hasAny}
-            onPress={() => router.push("/conectar")}
-          />
-        </>
-      }
+      title="Conecte um banco"
+      sub="Seus dados aparecem aqui depois da primeira leitura."
+      footer={<Button label="Conectar um banco" onPress={() => router.push("/conectar")} />}
     >
-      {connections.map((conn) => (
-        <View key={conn.itemId} style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.rule }}>
-          <Text style={{ fontFamily: font.medium, fontSize: 17, color: c.ink }}>{conn.bankName}</Text>
-          <Fine>
-            {conn.readState === "reading" ? "Lendo…" : conn.readState === "failed" ? "A leitura não terminou" : "Em dia"}
-          </Fine>
-        </View>
-      ))}
-      {hasAny ? null : <Body>Nenhuma Conexão ainda.</Body>}
+      <Body>Nenhuma Conexão ainda.</Body>
     </Screen>
   );
 }

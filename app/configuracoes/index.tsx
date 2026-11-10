@@ -21,6 +21,8 @@ export default function Configuracoes() {
   return (
     <SettingsScreen title="Configurações">
       <ScrollView>
+        <SectionLabel>Bancos</SectionLabel>
+        <SettingsRow label="Conexões" onPress={() => router.push("/conexoes")} />
         <SectionLabel>Pluggy</SectionLabel>
         <SettingsRow label="Credenciais" onPress={() => router.push("/configuracoes/credenciais")} />
         <SectionLabel>Transações</SectionLabel>
