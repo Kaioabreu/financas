@@ -8,6 +8,7 @@ import { useLiveData } from "../../src/shell/useLiveData";
 import { useCore } from "../../src/shell/appCore";
 import { MonthBar } from "../../src/shell/MonthBar";
 import { SourceChips } from "../../src/shell/SourceChips";
+import { sourceLabel } from "../../src/shell/sourceLabel";
 import { useMonth } from "../../src/shell/month";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { AppCategory, CpfStatus } from "../../src/core/classification";
@@ -98,7 +99,7 @@ export default function Transacoes() {
                 textDecorationLine: a.id === selected ? "underline" : "none",
               }}
             >
-              {a.kind === "card" ? `Cartão · ${a.name}` : a.name}
+              {sourceLabel(a)}
             </Text>
           </Pressable>
         ))}

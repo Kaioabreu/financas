@@ -1,5 +1,6 @@
-import { Pressable, ScrollView, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import type { AccountSummary } from "../core/connections";
+import { sourceLabel } from "./sourceLabel";
 import { font, usePalette } from "./theme";
 
 /**
@@ -10,12 +11,7 @@ export function SourceChips({ accounts, selected, onToggle }: { accounts: Accoun
   const c = usePalette();
   if (accounts.length < 2) return null;
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={{ flexGrow: 0, marginTop: 12 }}
-      contentContainerStyle={{ paddingHorizontal: 24, gap: 8 }}
-    >
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12, paddingHorizontal: 24 }}>
       {accounts.map((a) => {
         const on = selected.includes(a.id);
         return (
@@ -26,12 +22,10 @@ export function SourceChips({ accounts, selected, onToggle }: { accounts: Accoun
             accessibilityState={{ selected: on }}
             style={{ backgroundColor: on ? c.ink : c.track, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}
           >
-            <Text style={{ fontFamily: font.medium, fontSize: 14, color: on ? c.bg : c.ink }}>
-              {a.kind === "card" ? `Cartão · ${a.name}` : a.name}
-            </Text>
+            <Text style={{ fontFamily: font.medium, fontSize: 14, color: on ? c.bg : c.ink }}>{sourceLabel(a)}</Text>
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
