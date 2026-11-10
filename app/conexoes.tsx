@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import type { AccountSummary, ConnectionSummary } from "../src/core/connections";
+import { useLiveData } from "../src/shell/useLiveData";
 import { useCore } from "../src/shell/appCore";
 import { expiryText, readTime, stateLabel } from "../src/shell/connectionLabels";
 import { embeddedConfig } from "../src/core/config";
@@ -23,11 +24,7 @@ export default function Conexoes() {
     setConnections(await core.listConnections());
     setAccounts(await core.listAccounts());
   }, [core]);
-  useEffect(() => {
-    void load();
-    const timer = setInterval(load, 3000);
-    return () => clearInterval(timer);
-  }, [load]);
+  useLiveData(load, []);
 
   function confirmRemove(conn: ConnectionSummary) {
     Alert.alert(

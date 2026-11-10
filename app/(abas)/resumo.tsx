@@ -1,13 +1,14 @@
 import { useRouter } from "expo-router";
 import type { BillGap } from "../../src/core/bills";
 import { embeddedConfig } from "../../src/core/config";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NoticeQueue } from "../../src/core/status";
 import type { ConnectionSummary } from "../../src/core/connections";
 import { bankNames, readTime, stateLabel } from "../../src/shell/connectionLabels";
 import type { MonthPoint, MonthSummary } from "../../src/core/summary";
+import { useLiveData } from "../../src/shell/useLiveData";
 import { useCore } from "../../src/shell/appCore";
 import { useChartColors } from "../../src/shell/chartColors";
 import { money, moneyRound, signedMoney } from "../../src/shell/format";
@@ -31,25 +32,16 @@ export default function Resumo() {
   const [queue, setQueue] = useState<NoticeQueue>({ shown: null, more: 0 });
   const router = useRouter();
 
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      const [s, h, conns, q, g] = await Promise.all([core.monthSummary(month), core.monthHistory(month, 6), core.listConnections(), core.notices(), core.billGaps({ month })]);
-      if (alive) {
-        setSummary(s);
-        setHistory(h);
-        setConnections(conns);
-        setQueue(q);
-        setGaps(g);
-      }
-    };
-    void load();
-    const timer = setInterval(load, 3000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [core, month]);
+  useLiveData(async (alive) => {
+    const [s, h, conns, q, g] = await Promise.all([core.monthSummary(month), core.monthHistory(month, 6), core.listConnections(), core.notices(), core.billGaps({ month })]);
+    if (alive()) {
+      setSummary(s);
+      setHistory(h);
+      setConnections(conns);
+      setQueue(q);
+      setGaps(g);
+    }
+  }, [month]);
 
   const monthName = monthLabel(month).split(" de ")[0];
   const peak = Math.max(1, ...history.flatMap((p) => [p.income, p.expenses]));
@@ -57,9 +49,16 @@ export default function Resumo() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>
-      <View style={{ position: "absolute", top: insets.top + 12, right: 16, zIndex: 2 }}>
-        <Pressable onPress={() => router.push("/configuracoes")} accessibilityRole="button" accessibilityLabel="Configurações" hitSlop={10}>
-          <Text style={{ fontSize: 22, color: c.ink2 }}>⚙</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 24, paddingRight: 12 }}>
+        <Text style={{ fontFamily: font.semibold, fontSize: 28, color: c.ink }}>Resumo</Text>
+        <Pressable
+          onPress={() => router.push("/configuracoes")}
+          accessibilityRole="button"
+          accessibilityLabel="Configurações"
+          hitSlop={4}
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
+        >
+          <Text style={{ fontSize: 24, color: c.ink2 }}>⚙</Text>
         </Pressable>
       </View>
       <MonthBar />

@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MonthSummary } from "../../src/core/summary";
+import { useLiveData } from "../../src/shell/useLiveData";
 import { useCore } from "../../src/shell/appCore";
 import { categoryColor, useChartColors } from "../../src/shell/chartColors";
 import { money, moneyRound } from "../../src/shell/format";
@@ -23,19 +24,10 @@ export default function Gastos() {
   const [summary, setSummary] = useState<MonthSummary | null>(null);
   const [mode, setMode] = useState<"category" | "week">("category");
 
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      const s = await core.monthSummary(month);
-      if (alive) setSummary(s);
-    };
-    void load();
-    const timer = setInterval(load, 3000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [core, month]);
+  useLiveData(async (alive) => {
+    const s = await core.monthSummary(month);
+    if (alive()) setSummary(s);
+  }, [month]);
 
   const monthName = monthLabel(month).split(" de ")[0];
   const gross = summary ? summary.categories.reduce((s, x) => s + x.amount, 0) : 0;

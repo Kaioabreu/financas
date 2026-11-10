@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AssetClass, NetWorthView } from "../../src/core/networth";
 import type { PerformancePeriod, PerformanceView } from "../../src/core/performance";
+import { useLiveData } from "../../src/shell/useLiveData";
+import { EvolutionChart } from "../../src/shell/EvolutionChart";
 import { useCore } from "../../src/shell/appCore";
-import { money, moneyRound, signedMoney } from "../../src/shell/format";
+import { money, signedMoney } from "../../src/shell/format";
 import { Body, Fine, font, usePalette } from "../../src/shell/theme";
 
 const CLASS_LABEL: Record<AssetClass, string> = {
@@ -14,7 +16,6 @@ const CLASS_LABEL: Record<AssetClass, string> = {
   funds: "Fundos",
   other: "Outros",
 };
-const SHORT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 export default function Patrimonio() {
@@ -24,38 +25,15 @@ export default function Patrimonio() {
   const [view, setView] = useState<NetWorthView | null>(null);
   const [perf, setPerf] = useState<PerformanceView | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      const v = await core.netWorth();
-      if (alive) setView(v);
-    };
-    void load();
-    const timer = setInterval(load, 3000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [core]);
-
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      const p = await core.performance();
-      if (alive) setPerf(p);
-    };
-    void load();
-    const timer = setInterval(load, 30000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [core]);
+  useLiveData(async (alive) => {
+    const v = await core.netWorth();
+    if (alive()) setView(v);
+    const p = await core.performance();
+    if (alive()) setPerf(p);
+  }, []);
 
   // One color per class: the first is the accent, the others step down in lightness.
   const shade = [c.ink, c.acc, c.ink2, c.rule, c.rule];
-  const peak = Math.max(1, ...(view?.curve.map((p) => Math.abs(p.total)) ?? [1]));
-  const BAR_H = 110;
   const missing = view?.banks.filter((b) => b.mayBeMissing) ?? [];
   const old = view?.banks.filter((b) => b.valueDate) ?? [];
 
@@ -92,28 +70,7 @@ export default function Patrimonio() {
             )}
 
             <Text style={{ fontFamily: font.semibold, fontSize: 16, color: c.ink, marginTop: 28 }}>Evolução</Text>
-            <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginTop: 12 }}>
-              {view.curve.map((p) => {
-                const m = Number(p.month.slice(5, 7));
-                return (
-                  <View key={p.month} style={{ alignItems: "center", flex: 1 }}>
-                    <Text style={{ fontFamily: font.medium, fontSize: 11.5, color: p.today ? c.ink : c.ink2, marginBottom: 4 }}>{moneyRound(p.total)}</Text>
-                    <View style={{ height: BAR_H, justifyContent: "flex-end" }}>
-                      <View
-                        style={{
-                          width: 18,
-                          height: Math.max(2, (BAR_H * Math.abs(p.total)) / peak),
-                          backgroundColor: p.today ? c.acc : p.estimated ? c.rule : c.ink2,
-                          opacity: p.today || p.estimated ? 1 : 0.5,
-                          borderRadius: 3,
-                        }}
-                      />
-                    </View>
-                    <Text style={{ fontFamily: font.regular, fontSize: 12, color: p.today ? c.ink : c.ink2, marginTop: 6 }}>{p.today ? "hoje" : SHORT[m - 1]}</Text>
-                  </View>
-                );
-              })}
-            </View>
+            <EvolutionChart curve={view.curve} />
 
             {perf ? (
               <>

@@ -16,10 +16,10 @@ export function FundQuotasSheet() {
     let alive = true;
     const check = () => core.fundQuotasPrompt().then((v) => alive && setOpen(v), () => {});
     void check();
-    const timer = setInterval(check, 3000);
+    const off = core.onDataChange(check);
     return () => {
       alive = false;
-      clearInterval(timer);
+      off();
     };
   }, [core]);
 

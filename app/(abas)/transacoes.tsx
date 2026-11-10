@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FlatList, Linking, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BillGap } from "../../src/core/bills";
 import { embeddedConfig } from "../../src/core/config";
 import type { AccountSummary, ConnectionSummary, TransactionRow } from "../../src/core/connections";
+import { useLiveData } from "../../src/shell/useLiveData";
 import { useCore } from "../../src/shell/appCore";
 import { MonthBar } from "../../src/shell/MonthBar";
 import { useMonth } from "../../src/shell/month";
@@ -45,36 +46,27 @@ export default function Transacoes() {
     }
   };
 
-  // The tab fills in as the first read advances: reload every few seconds.
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      const list = await core.listAccounts();
-      if (!alive) return;
-      setAccounts(list);
-      setConnections(await core.listConnections());
-      setCpf(await core.cpfStatus());
-      const card = list.find((a) => a.id === (selected ?? list[0]?.id));
-      const found = card?.kind === "card" && !filtered ? await core.billGaps({ month, accountId: card.id }) : [];
-      if (alive) setGaps(found);
-      const id = selected ?? list[0]?.id ?? null;
-      if (id !== selected) setSelected(id);
-      // Coming from Gastos, the list covers every account and only what that slice summed.
-      if (filtered) {
-        const found = await core.listTransactions({ month, category, days });
-        if (alive) setRows(found);
-      } else if (id) {
-        const found = await core.listTransactions({ accountId: id, month });
-        if (alive) setRows(found);
-      }
-    };
-    void load();
-    const timer = setInterval(load, 3000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [core, month, selected, filtered, category, days?.from, days?.to]);
+  // The tab fills in as the first read advances: it reloads when the stored data changes.
+  useLiveData(async (alive) => {
+    const list = await core.listAccounts();
+    if (!alive()) return;
+    setAccounts(list);
+    setConnections(await core.listConnections());
+    setCpf(await core.cpfStatus());
+    const card = list.find((a) => a.id === (selected ?? list[0]?.id));
+    const gapsFound = card?.kind === "card" && !filtered ? await core.billGaps({ month, accountId: card.id }) : [];
+    if (alive()) setGaps(gapsFound);
+    const id = selected ?? list[0]?.id ?? null;
+    if (id !== selected) setSelected(id);
+    // Coming from Gastos, the list covers every account and only what that slice summed.
+    if (filtered) {
+      const found = await core.listTransactions({ month, category, days });
+      if (alive()) setRows(found);
+    } else if (id) {
+      const found = await core.listTransactions({ accountId: id, month });
+      if (alive()) setRows(found);
+    }
+  }, [month, selected, filtered, category, days?.from, days?.to]);
 
   const dataAt = accounts.find((a) => a.id === selected)?.dataFrom ?? null;
 

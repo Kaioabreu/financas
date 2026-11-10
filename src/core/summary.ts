@@ -1,5 +1,6 @@
 // Core: the monthly view (Resumo and Gastos). A pure function of the stored transactions and
 // their classification; nothing is stored, so a change of rule or category shows up at once.
+import { cached } from "./dataVersion";
 import { bankTransaction } from "../db/schema";
 import type { AppCategory, Classification, IncomeOrigin } from "./classification";
 import type { CoreDatabase } from "./createCore";
@@ -84,9 +85,12 @@ export function weeksOf(month: string): { startDay: number; endDay: number }[] {
 
 export function createSummary(deps: Deps): SummaryApi {
   /** Everything that counts today: a date still to come only counts when it arrives. */
-  async function counted(): Promise<Entry[]> {
+  function counted(): Promise<Entry[]> {
     const now = new Date(deps.clock());
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return cached(deps.db, `counted:${today}`, () => computeCounted(today));
+  }
+  async function computeCounted(today: string): Promise<Entry[]> {
     const plan = await buildInstallmentPlan(deps.db);
     const rows = (await deps.db.select().from(bankTransaction))
       .map((r) => ({ ...r, date: plan.dateOf(r.id, r.date) }))
