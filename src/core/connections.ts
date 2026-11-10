@@ -57,6 +57,8 @@ export interface AccountSummary {
   itemId: string;
   name: string;
   kind: "account" | "card";
+  /** The bank the account belongs to ("BTG Pactual", "Nubank"…), from its Connection. */
+  bankName: string;
   /** "03/11" when the account's data stopped (its Connection is atrasada or a reconectar). */
   dataFrom: string | null;
 }
@@ -103,6 +105,8 @@ export interface ConnectionsApi {
    */
   listTransactions(query: {
     accountId?: string;
+    /** Only these accounts and cards; empty or absent = all. */
+    accountIds?: string[];
     month: string;
     category?: Classification["category"];
     days?: { from: number; to: number };
@@ -350,6 +354,7 @@ export function createConnections(deps: Deps): ConnectionsApi {
 
     async listAccounts() {
       const rows = await db.select().from(account);
+      const banks = new Map((await db.select().from(connection)).map((c) => [c.itemId, c.bankName]));
       const stopped = new Map((await this.listConnections()).filter((c) => c.status).map((c) => [c.itemId, c]));
       const dates = new Map(
         (await db.select().from(connection)).map((c) => [c.itemId, (c.productDates ? JSON.parse(c.productDates) : {}) as Record<string, string>]),
@@ -358,15 +363,16 @@ export function createConnections(deps: Deps): ConnectionsApi {
         const kind = r.type === "CREDIT" ? ("card" as const) : ("account" as const);
         const conn = stopped.get(r.itemId);
         const own = dates.get(r.itemId)?.[kind === "card" ? "creditCards" : "transactions"];
-        return { id: r.id, itemId: r.itemId, name: r.name, kind, dataFrom: conn ? dayLabel(own ?? conn.dataAt) : null };
+        return { id: r.id, itemId: r.itemId, name: r.name, kind, bankName: banks.get(r.itemId) ?? r.name, dataFrom: conn ? dayLabel(own ?? conn.dataAt) : null };
       });
     },
 
-    async listTransactions({ accountId, month, category, days }) {
+    async listTransactions({ accountId, accountIds, month, category, days }) {
       // The month is the one the transaction counts in, not the one Pluggy dated it.
       const plan = await buildInstallmentPlan(db);
       const rows = (await (accountId ? db.select().from(bankTransaction).where(eq(bankTransaction.accountId, accountId)) : db.select().from(bankTransaction)))
         .filter((r) => plan.dateOf(r.id, r.date).startsWith(`${month}-`))
+        .filter((r) => !accountIds?.length || accountIds.includes(r.accountId))
         .sort((a, b) => plan.dateOf(b.id, b.date).localeCompare(plan.dateOf(a.id, a.date)));
       const classes = await deps.classify(rows.map((r) => r.id));
       const owners = new Map((await db.select().from(account)).map((a) => [a.id, a.name]));

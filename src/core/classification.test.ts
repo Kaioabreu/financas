@@ -116,6 +116,17 @@ describe("Classificação: transferência própria", () => {
     expect(rows["PIX OUTRO"].nature).toBe("expense");
   });
 
+  it("Tef e RECEBIMENTO TRANSFERÊNCIA entre contas do titular valem só pelo CPF em paymentData, nos dois lados", async () => {
+    const w = await world();
+    const rows = await w.read([
+      bankTx({ description: "Tef", amount: -300, operationType: "TRANSFERENCIA_MESMA_INSTITUICAO", ...party("receiver", USER_CPF) }),
+      bankTx({ description: "Tef ", type: "CREDIT", amount: 300, operationType: "TRANSFERENCIA_MESMA_INSTITUICAO", ...party("payer", USER_CPF), id: tid(903) }),
+      bankTx({ description: "RECEBIMENTO TRANSFERÊNCIA", type: "CREDIT", amount: 300, operationType: "TED", ...party("payer", USER_CPF) }),
+      bankTx({ description: "ENVIO TRANSFERÊNCIA", amount: -300, operationType: "TED", ...party("receiver", USER_CPF) }),
+    ]);
+    for (const r of Object.values(rows)) expect(r.nature).toBe("own-transfer");
+  });
+
   it("não é transferência própria o que as regras embutidas reconhecem como aporte", async () => {
     const w = await world();
     const rows = await w.read([
@@ -167,7 +178,12 @@ describe("Classificação: pagamento de fatura", () => {
 });
 
 describe("Classificação: salário", () => {
-  const paycheck = [identity({ document: USER_CPF, paychecksBankLink: [{ employerDocument: EMPLOYER }] })];
+  // The real /identity nests the paycheck link under financialRelationships.
+  const paycheck = [
+    identity({ document: USER_CPF, financialRelationships: { paychecksBankLink: [{ employerDocument: EMPLOYER }] } }),
+  ];
+  const salaryIn = (description: string, operationType: string) =>
+    bankTx({ description, type: "CREDIT", amount: 5000, operationType, ...party("payer", EMPLOYER) });
 
   it("transferência cujo pagador é o empregador é Salário; o documento sozinho não basta", async () => {
     const w = await world({ identity: paycheck });
@@ -177,6 +193,27 @@ describe("Classificação: salário", () => {
     ]);
     expect(rows["PAGTO EMPREGADOR"]).toMatchObject({ nature: "income", origin: "salary" });
     expect(rows["BOLETO EMPREGADOR"]).toMatchObject({ nature: "income", origin: "other-income" });
+  });
+
+  it("o formato real (TRANSFERENCIA_MESMA_INSTITUICAO, descrição InternalTransfer) é Salário mesmo quando o empregador é o próprio banco", async () => {
+    // The user works at the connected bank: employerDocument equals the bank's own CNPJ.
+    const w = await world({
+      identity: [
+        identity({
+          document: USER_CPF,
+          companiesCnpj: [EMPLOYER],
+          financialRelationships: { paychecksBankLink: [{ employerDocument: EMPLOYER, paycheckBankCnpj: EMPLOYER }] },
+        }),
+      ],
+    });
+    const rows = await w.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")]);
+    expect(rows.InternalTransfer).toMatchObject({ nature: "income", origin: "salary" });
+  });
+
+  it("companiesCnpj sozinho não faz o pagador virar empregador; sem paychecksBankLink a entrada fica em Outras receitas", async () => {
+    const w = await world({ identity: [identity({ document: USER_CPF, companiesCnpj: [EMPLOYER] })] });
+    const rows = await w.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")]);
+    expect(rows.InternalTransfer).toMatchObject({ nature: "income", origin: "other-income" });
   });
 
   it("FOLHA_PAGAMENTO e Income > Salary também são Salário", async () => {
@@ -225,6 +262,12 @@ describe("Classificação: regras embutidas", () => {
       b("CUPOM - CRA XYZ", 8),
       b("TAXA REMUNERAÇÃO - BTC", 4),
       b("Rendimentos", 2, { operationType: "RESGATE_APLIC_FINANCEIRA" }),
+      b("CONTA REMUNERADA - RESGATE REMUNERAÇÃO", 3, { operationType: "OUTROS" }),
+      b("ValorRendimentoSaldoRemunerado", 1, { operationType: "RENDIMENTO_APLIC_FINANCEIRA" }),
+      b("CRÉDITO REMUNERAÇÃO", 1, { operationType: "RENDIMENTO_APLIC_FINANCEIRA" }),
+      b("CONTA REMUNERADA - APLICAÇÃO AUTOMÁTICA", -70, { operationType: "APLICACAO_FINANCEIRA" }),
+      b("CONTA REMUNERADA - RESGATE APLICAÇÃO", 70, { operationType: "RESGATE_APLIC_FINANCEIRA" }),
+      b("CONTA REMUNERADA - RESGATE APLICAÇÃO ", 70, { operationType: "OUTROS", id: tid(902) }),
       b("Cofrinho", -20, { operationType: "TRANSFERENCIA_SALDO_RESERVADO" }),
       b("Cofrinho volta", 20, { operationType: "TRANSFERENCIA_SALDO_RESERVADO" }),
       b("JCP ACME", 5),
@@ -242,8 +285,11 @@ describe("Classificação: regras embutidas", () => {
     for (const d of ["LIQ BOLSA - VISTA TX 1", "TAXA SOBRE VALOR EM CUSTÓDIA", "IR - BTC", "IOF DE COMPRA INTERNACIONAL"]) {
       expect(rows[d]).toMatchObject({ nature: "expense", category: "fees-taxes" });
     }
-    for (const d of ["CUPOM - CRA XYZ", "TAXA REMUNERAÇÃO - BTC", "Rendimentos", "JCP ACME", "Dividendos ACME", "Rendimento FII XPTO11"]) {
+    for (const d of ["CUPOM - CRA XYZ", "TAXA REMUNERAÇÃO - BTC", "Rendimentos", "CONTA REMUNERADA - RESGATE REMUNERAÇÃO", "ValorRendimentoSaldoRemunerado", "CRÉDITO REMUNERAÇÃO", "JCP ACME", "Dividendos ACME", "Rendimento FII XPTO11"]) {
       expect(rows[d]).toMatchObject({ nature: "income", origin: "yield" });
+    }
+    for (const d of ["CONTA REMUNERADA - APLICAÇÃO AUTOMÁTICA", "CONTA REMUNERADA - RESGATE APLICAÇÃO", "CONTA REMUNERADA - RESGATE APLICAÇÃO "]) {
+      expect(rows[d].nature).toBe("own-transfer");
     }
     expect(rows.Cofrinho.nature).toBe("investment");
     expect(rows["Cofrinho volta"].nature).toBe("withdrawal");

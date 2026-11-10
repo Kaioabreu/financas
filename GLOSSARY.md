@@ -58,7 +58,7 @@ O assunto de um gasto (Mercado, Transporte…), escolhido de uma lista fixa do a
 _Código_: `Category`
 
 **Fatura**:
-O conjunto de compras de um cartão cobradas num mesmo vencimento. Ela não decide em que mês um gasto conta: a compra conta no mês em que foi feita.
+O conjunto de compras de um cartão cobradas num mesmo vencimento. Ela não decide em que mês um gasto conta: a compra conta no mês em que foi feita. O ciclo da fatura termina no `billClosingDate` que o Pluggy manda (começa no dia seguinte ao fechamento da anterior); só sem ele vale o palpite de 7 dias antes do vencimento. A fatura de cada compra vem do `creditCardMetadata.billId`, não das datas. A Lacuna só é conferida nos bancos cujo `totalAmount` bate com a fatura real (Mercado Pago e Nubank); o do BTG não é o total real da fatura, então o BTG fica de fora e só aparece nas contagens do diagnóstico.
 _Código_: `Bill`
 
 **Lacuna**:
@@ -104,7 +104,7 @@ Dinheiro novo que entra para o usuário vindo de fora dele. Toda receita tem uma
 _Código_: `Income`
 
 **Salário**:
-Origem de receita que reúne o pagamento do trabalho do usuário, incluindo PLR e bônus.
+Origem de receita que reúne o pagamento do trabalho do usuário, incluindo PLR e bônus. O app a reconhece pela entrada de transferência (Pix, TED, DOC ou transferência na mesma instituição) cujo pagador é o CNPJ do empregador, lido do `/identity` (`financialRelationships.paychecksBankLink`), por `FOLHA_PAGAMENTO` ou pela categoria Salary. Se o usuário trabalha no banco conectado, o empregador é o próprio banco e o salário vem como transferência na mesma instituição; por isso essa regra vale antes de qualquer outra de transferência. Se o `/identity` não traz o CNPJ do empregador, a entrada cai em outras receitas e o usuário a marca com uma regra própria ou à mão.
 _Código_: `Salary`
 
 **Rendimento**:

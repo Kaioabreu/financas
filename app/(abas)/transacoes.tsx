@@ -7,6 +7,8 @@ import type { AccountSummary, ConnectionSummary, TransactionRow } from "../../sr
 import { useLiveData } from "../../src/shell/useLiveData";
 import { useCore } from "../../src/shell/appCore";
 import { MonthBar } from "../../src/shell/MonthBar";
+import { SourceChips } from "../../src/shell/SourceChips";
+import { sourceLabel } from "../../src/shell/sourceLabel";
 import { useMonth } from "../../src/shell/month";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { AppCategory, CpfStatus } from "../../src/core/classification";
@@ -20,7 +22,7 @@ export default function Transacoes() {
   const core = useCore();
   const c = usePalette();
   const insets = useSafeAreaInsets();
-  const { month } = useMonth();
+  const { month, sources, toggleSource } = useMonth();
   const params = useLocalSearchParams<{ category?: string; from?: string; to?: string }>();
   const category = params.category as AppCategory | undefined;
   const days = params.from && params.to ? { from: Number(params.from), to: Number(params.to) } : undefined;
@@ -60,13 +62,13 @@ export default function Transacoes() {
     if (id !== selected) setSelected(id);
     // Coming from Gastos, the list covers every account and only what that slice summed.
     if (filtered) {
-      const found = await core.listTransactions({ month, category, days });
+      const found = await core.listTransactions({ month, category, days, accountIds: sources });
       if (alive()) setRows(found);
     } else if (id) {
       const found = await core.listTransactions({ accountId: id, month });
       if (alive()) setRows(found);
     }
-  }, [month, selected, filtered, category, days?.from, days?.to]);
+  }, [month, selected, filtered, category, days?.from, days?.to, sources]);
 
   const dataAt = accounts.find((a) => a.id === selected)?.dataFrom ?? null;
 
@@ -76,10 +78,15 @@ export default function Transacoes() {
       <View style={{ alignItems: "center", marginTop: 2 }}>
         <LinkText onPress={() => router.push("/regras")}>Regras</LinkText>
       </View>
+      {filtered ? (
+        <View style={{ marginTop: 16 }}>
+          <SourceChips accounts={accounts} selected={sources} onToggle={toggleSource} />
+        </View>
+      ) : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0, marginTop: 16 }}
+        style={{ flexGrow: 0, marginTop: 16, display: filtered ? "none" : "flex" }}
         contentContainerStyle={{ paddingHorizontal: 24, gap: 20 }}
       >
         {accounts.map((a) => (
@@ -92,7 +99,7 @@ export default function Transacoes() {
                 textDecorationLine: a.id === selected ? "underline" : "none",
               }}
             >
-              {a.kind === "card" ? `Cartão · ${a.name}` : a.name}
+              {sourceLabel(a)}
             </Text>
           </Pressable>
         ))}
@@ -168,7 +175,7 @@ export default function Transacoes() {
         row={editing}
         onClose={() => {
           setEditing(null);
-          void core.listTransactions({ accountId: selected ?? "", month }).then(setRows);
+          if (!filtered) void core.listTransactions({ accountId: selected ?? "", month }).then(setRows);
         }}
       />
     </View>

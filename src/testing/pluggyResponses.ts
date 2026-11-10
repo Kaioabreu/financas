@@ -81,6 +81,7 @@ function baseBill() {
     minimumPaymentAmount: 25,
     allowsInstallments: true,
     financeCharges: [] as unknown[],
+    billClosingDate: undefined as string | undefined,
   };
 }
 export function bill(overrides: Partial<ReturnType<typeof baseBill>> = {}) {
@@ -158,7 +159,7 @@ export function identity(overrides: Record<string, unknown> = {}) {
     fullName: "Pessoa Sintética",
     document: "00000000000",
     documentType: "CPF",
-    paychecksBankLink: [] as unknown[],
+    financialRelationships: { paychecksBankLink: [] as unknown[] },
     ...overrides,
   };
 }
