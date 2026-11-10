@@ -58,7 +58,7 @@ O assunto de um gasto (Mercado, Transporte…), escolhido de uma lista fixa do a
 _Código_: `Category`
 
 **Fatura**:
-O conjunto de compras de um cartão cobradas num mesmo vencimento. Ela não decide em que mês um gasto conta: a compra conta no mês em que foi feita.
+O conjunto de compras de um cartão cobradas num mesmo vencimento. Ela não decide em que mês um gasto conta: a compra conta no mês em que foi feita. O ciclo da fatura termina no `billClosingDate` que o Pluggy manda (começa no dia seguinte ao fechamento da anterior); só sem ele vale o palpite de 7 dias antes do vencimento. A fatura de cada compra vem do `creditCardMetadata.billId`, não das datas. A Lacuna só é conferida nos bancos cujo `totalAmount` bate com a fatura real (Mercado Pago e Nubank); o do BTG não é o total real da fatura, então o BTG fica de fora e só aparece nas contagens do diagnóstico.
 _Código_: `Bill`
 
 **Lacuna**:
