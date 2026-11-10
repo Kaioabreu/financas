@@ -103,6 +103,8 @@ export interface ConnectionsApi {
    */
   listTransactions(query: {
     accountId?: string;
+    /** Only these accounts and cards; empty or absent = all. */
+    accountIds?: string[];
     month: string;
     category?: Classification["category"];
     days?: { from: number; to: number };
@@ -362,11 +364,12 @@ export function createConnections(deps: Deps): ConnectionsApi {
       });
     },
 
-    async listTransactions({ accountId, month, category, days }) {
+    async listTransactions({ accountId, accountIds, month, category, days }) {
       // The month is the one the transaction counts in, not the one Pluggy dated it.
       const plan = await buildInstallmentPlan(db);
       const rows = (await (accountId ? db.select().from(bankTransaction).where(eq(bankTransaction.accountId, accountId)) : db.select().from(bankTransaction)))
         .filter((r) => plan.dateOf(r.id, r.date).startsWith(`${month}-`))
+        .filter((r) => !accountIds?.length || accountIds.includes(r.accountId))
         .sort((a, b) => plan.dateOf(b.id, b.date).localeCompare(plan.dateOf(a.id, a.date)));
       const classes = await deps.classify(rows.map((r) => r.id));
       const owners = new Map((await db.select().from(account)).map((a) => [a.id, a.name]));

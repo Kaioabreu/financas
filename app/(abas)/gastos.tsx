@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { AccountSummary } from "../../src/core/connections";
 import type { MonthSummary } from "../../src/core/summary";
 import { useLiveData } from "../../src/shell/useLiveData";
 import { useCore } from "../../src/shell/appCore";
@@ -9,6 +10,7 @@ import { categoryColor, useChartColors } from "../../src/shell/chartColors";
 import { money, moneyRound } from "../../src/shell/format";
 import { categoryLabel } from "../../src/shell/labels";
 import { MonthBar } from "../../src/shell/MonthBar";
+import { SourceChips } from "../../src/shell/SourceChips";
 import { monthLabel, useMonth } from "../../src/shell/month";
 import { Body, Fine, font, usePalette } from "../../src/shell/theme";
 
@@ -20,14 +22,19 @@ export default function Gastos() {
   const colors = useChartColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { month } = useMonth();
+  const { month, sources, toggleSource } = useMonth();
+  const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [summary, setSummary] = useState<MonthSummary | null>(null);
   const [mode, setMode] = useState<"category" | "week">("category");
 
   useLiveData(async (alive) => {
-    const s = await core.monthSummary(month);
-    if (alive()) setSummary(s);
-  }, [month]);
+    const list = await core.listAccounts();
+    const s = await core.monthSummary(month, sources);
+    if (alive()) {
+      setAccounts(list);
+      setSummary(s);
+    }
+  }, [month, sources]);
 
   const monthName = monthLabel(month).split(" de ")[0];
   const gross = summary ? summary.categories.reduce((s, x) => s + x.amount, 0) : 0;
@@ -36,6 +43,7 @@ export default function Gastos() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>
       <MonthBar />
+      <SourceChips accounts={accounts} selected={sources} onToggle={toggleSource} />
       <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 24, marginTop: 16 }}>
         {(["category", "week"] as const).map((m) => (
           <Pressable

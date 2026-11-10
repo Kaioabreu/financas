@@ -261,4 +261,18 @@ describe("Primeira leitura", () => {
     expect(await core.listTransactions({ accountId: BANK, month: "2026-10" })).toHaveLength(0);
     expect(await core.listConnections()).toMatchObject([{ readState: "failed" }]);
   });
+
+  it("accountIds com duas contas mostra as duas; vazio = todas", async () => {
+    const { core, fetch } = await connected();
+    const bank = transaction({ id: "44444444-0000-0000-0000-000000000001", description: "NO BANCO", accountId: BANK });
+    const card = transaction({ id: "44444444-0000-0000-0000-000000000002", description: "NO CARTAO", accountId: CARD });
+    fetch.on("GET", `${API}/v2/transactions`, (call) => ({
+      body: { results: call.url.includes(`accountId=${CARD}`) ? [card] : [bank], next: null },
+    }));
+    await core.readConnection(ITEM_ID);
+    const names = async (accountIds?: string[]) => (await core.listTransactions({ month: "2026-10", accountIds })).map((r) => r.description).sort();
+    expect(await names([BANK, CARD])).toEqual(["NO BANCO", "NO CARTAO"]);
+    expect(await names([CARD])).toEqual(["NO CARTAO"]);
+    expect(await names([])).toEqual(["NO BANCO", "NO CARTAO"]);
+  });
 });
