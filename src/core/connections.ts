@@ -283,11 +283,13 @@ export function createConnections(deps: Deps): ConnectionsApi {
             await renew(owner, itemId, current);
             return { ok: true, renewed: true };
           }
+          // The connector is the aggregator, not the bank: the first read names the Connection.
+          const position = (await db.select({ itemId: connection.itemId }).from(connection)).length + 1;
           await db
             .insert(connection)
             .values({
               itemId,
-              bankName: current.connector?.name ?? "Banco",
+              bankName: `Conta ${position}`,
               connectorId: current.connector?.id ?? null,
               createdAt: current.createdAt ?? null,
               consentExpiresAt: current.consentExpiresAt ?? null,

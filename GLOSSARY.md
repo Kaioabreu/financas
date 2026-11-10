@@ -22,7 +22,7 @@ _Avoid_: chaves, token, senha
 _Código_: `Credentials`
 
 **Conexão**:
-A autorização que o usuário dá no Meu Pluggy para o app ler os dados de um banco dele. Vence em 1 ano; renová-la exige um novo login do usuário e não muda os dados já lidos. Não é a ligação do banco com o Meu Pluggy, que o usuário cuida no app do Meu Pluggy.
+A autorização que o usuário dá no Meu Pluggy para o app ler os dados de um banco dele. Vence em 1 ano; renová-la exige um novo login do usuário e não muda os dados já lidos. Não é a ligação do banco com o Meu Pluggy, que o usuário cuida no app do Meu Pluggy. O nome dela é o do banco, tirado do código do banco na conta (`bankData.transferNumber`); com vários bancos, os nomes distintos juntos ("BTG Pactual e Nubank"); sem código legível, "Conta N".
 _Avoid_: item, vínculo
 _Código_: `Connection`
 

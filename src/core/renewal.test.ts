@@ -65,6 +65,20 @@ describe("Renovação: o banco é reconhecido pelos ids das contas", () => {
     expect(conn!.consentExpiresAt).toBe("2027-11-09T12:00:00.000Z");
   });
 
+  it("a Conexão renovada mantém o nome do banco, antes e depois da próxima leitura", async () => {
+    const w = await world();
+    const bankData = { transferNumber: "260/0001/00000-0", closingBalance: 1000 };
+    w.state.accounts = [account({ itemId: OLD_ITEM, bankData }), creditCard({ itemId: OLD_ITEM })];
+    await w.core.readConnection(OLD_ITEM);
+    expect((await w.core.listConnections())[0]!.bankName).toBe("Nubank");
+    w.state.accounts = [account({ itemId: NEW_ITEM, bankData }), creditCard({ itemId: NEW_ITEM })];
+
+    await w.core.finishConnect(NEW_ITEM, { tabClosed: NEVER });
+    expect((await w.core.listConnections())[0]!.bankName).toBe("Nubank");
+    await w.core.readConnection(NEW_ITEM);
+    expect((await w.core.listConnections())[0]!.bankName).toBe("Nubank");
+  });
+
   it("o banco errado na renovação vira uma Conexão nova e não mexe na antiga", async () => {
     const w = await world();
     w.state.accounts = [account({ id: OTHER_BANK, itemId: NEW_ITEM, name: "Outro Banco" })];

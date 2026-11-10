@@ -98,7 +98,7 @@ describe("Conectar um banco: esperar a autorização", () => {
 
     expect(result).toEqual({ ok: true });
     expect(fetch.callsTo("DELETE", `${API}/items/${ITEM_ID}`)).toHaveLength(0);
-    expect(await core.listConnections()).toMatchObject([{ itemId: ITEM_ID, bankName: "MeuPluggy", readState: "reading" }]);
+    expect(await core.listConnections()).toMatchObject([{ itemId: ITEM_ID, bankName: "Conta 1", readState: "reading" }]);
   });
 
   it("item OUTDATED é apagado, e nenhuma Conexão é criada", async () => {

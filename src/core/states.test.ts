@@ -26,7 +26,7 @@ async function world(startAt = "2026-11-09T12:00:00.000Z", dataAt = FRESH) {
   await w.core.saveCredentials({ clientId: SYNTHETIC_CLIENT_ID, clientSecret: SYNTHETIC_CLIENT_SECRET });
   const state = { item: item({ connector: { id: 200, name: "BTG" }, lastUpdatedAt: dataAt }) as Record<string, unknown> | null, txFails: false };
   w.fetch.on("GET", `${API}/items/${ITEM_ID}`, () => (state.item === null ? { status: 404, body: {} } : { body: state.item }));
-  w.fetch.on("GET", `${API}/accounts`, { body: page([account()]) });
+  w.fetch.on("GET", `${API}/accounts`, { body: page([account({ name: "BTG" })]) });
   w.fetch.on("GET", `${API}/v2/transactions`, () =>
     state.txFails ? { status: 500, body: {} } : { body: { results: [transaction({ date: "2026-11-05T12:00:00.000Z" })], next: null } },
   );

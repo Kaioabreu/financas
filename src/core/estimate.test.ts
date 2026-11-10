@@ -270,7 +270,7 @@ describe("Estimativa: fonte que falha", () => {
     const w = await world(); // the SGS has no route: 404
     await withCdb(w);
 
-    expect((await w.core.netWorth()).estimating).toEqual(["MeuPluggy"]);
+    expect((await w.core.netWorth()).estimating).toEqual(["Conta Sintética"]);
     expect(await past(w)).toEqual({});
     await w.sync();
     expect(await w.core.diagnostic()).toContain("estimativa: pendente · 2 tentativas · fonte que falhou SGS 12");
@@ -387,7 +387,7 @@ describe("Estimativa: Tesouro Direto", () => {
   it("a fonte que segue falhando depois de 7 dias deixa o título na reta", async () => {
     const w = await world(); // no route: 404
     await w.connect(newBank(BANK_A, "BTG", [idle(BANK_A)], { investments: [bond({})] }));
-    expect((await w.core.netWorth()).estimating).toEqual(["MeuPluggy"]);
+    expect((await w.core.netWorth()).estimating).toEqual(["Conta Sintética"]);
     w.clock.advance(DAY * 7);
     await w.sync();
     expect((await w.core.netWorth()).estimating).toEqual([]);
