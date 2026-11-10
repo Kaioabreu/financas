@@ -7,7 +7,7 @@ import { monthLabel, shiftMonth, useMonth } from "../month";
 import { pixLabel } from "../pixLabel";
 import { font, usePalette } from "../theme";
 import { FilterSheet } from "./FilterSheet";
-import { brl, groupByDay, shortDay, weekday, type TxProps } from "./shared";
+import { amountColor, effective, groupByDay, money, signedMoney, shortDay, weekday, type TxProps } from "./shared";
 
 export function VariantA(p: TxProps) {
   const c = usePalette();
@@ -62,11 +62,11 @@ export function VariantA(p: TxProps) {
             <Text style={{ fontFamily: font.semibold, fontSize: 13.5, color: c.ink2 }}>
               {shortDay(section.date)} · {weekday(section.date)}
             </Text>
-            <Text style={{ fontFamily: font.medium, fontSize: 13.5, color: c.ink2 }}>{brl.format(section.total)}</Text>
+            <Text style={{ fontFamily: font.medium, fontSize: 13.5, color: c.ink2 }}>{signedMoney(section.total)}</Text>
           </View>
         )}
         renderItem={({ item }) => {
-          const label = pixLabel(item.description, item.amount, { style: "initial" });
+          const label = pixLabel(item.description, effective(item), { style: "initial" });
           const cat = item.category && item.category !== "other" ? item.category : undefined;
           return (
             <Pressable
@@ -79,7 +79,7 @@ export function VariantA(p: TxProps) {
                 {label.title}
                 {cat ? <Text style={{ color: c.ink2, fontSize: 13.5 }}>{`  ${categoryLabel[cat].name}`}</Text> : null}
               </Text>
-              <Text style={{ fontFamily: font.medium, fontSize: 16, color: item.amount < 0 ? c.ink : colors.pos }}>{brl.format(item.amount)}</Text>
+              <Text style={{ fontFamily: font.medium, fontSize: 16, color: amountColor(item, c, colors.pos) }}>{money(item)}</Text>
             </Pressable>
           );
         }}

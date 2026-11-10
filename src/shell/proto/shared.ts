@@ -61,7 +61,51 @@ export function groupByDay(rows: TransactionRow[]): DayGroup[] {
       out.push(g);
     }
     g.data.push(r);
-    g.total += r.amount;
+    g.total = netOf(g.data);
+    
   }
   return out;
+}
+
+/**
+ * Direction by nature, never by the raw sign: Pluggy sends a card purchase as positive and an account
+ * debit as negative. "out" = expense-like, "in" = income-like, "neutral" = own transfer / personal loan.
+ */
+export type Flow = "out" | "in" | "neutral";
+export function flowOf(r: TransactionRow): Flow {
+  switch (r.nature) {
+    case "expense":
+    case "investment":
+    case "bill-payment":
+      return "out";
+    case "income":
+    case "refund":
+    case "withdrawal":
+      return "in";
+    default:
+      return "neutral";
+  }
+}
+/** Amount with the sign the user should read: out negative, in positive, neutral absolute. */
+export function effective(r: TransactionRow): number {
+  const f = flowOf(r);
+  const v = Math.abs(r.amount);
+  return f === "out" ? -v : f === "in" ? v : r.amount < 0 ? -v : v;
+}
+/** "-R$ 10,00" / "+R$ 10,00"; neutral keeps no sign. */
+export function money(r: TransactionRow): string {
+  const f = flowOf(r);
+  const s = brl.format(Math.abs(r.amount));
+  return f === "out" ? `-${s}` : f === "in" ? `+${s}` : s;
+}
+export function amountColor(r: TransactionRow, c: { ink: string; ink2: string }, pos: string): string {
+  const f = flowOf(r);
+  return f === "out" ? c.ink : f === "in" ? pos : c.ink2;
+}
+/** Day total: expenses negative, incomes positive, neutral rows left out. */
+export function netOf(rows: TransactionRow[]): number {
+  return rows.reduce((s, r) => s + (flowOf(r) === "neutral" ? 0 : effective(r)), 0);
+}
+export function signedMoney(n: number): string {
+  return n < 0 ? `-${brl.format(-n)}` : n > 0 ? `+${brl.format(n)}` : brl.format(0);
 }

@@ -8,7 +8,7 @@ import { MonthBar } from "../MonthBar";
 import { pixLabel } from "../pixLabel";
 import { sourceLabel } from "../sourceLabel";
 import { font, usePalette } from "../theme";
-import { brl, groupByDay, shortDay, weekday, type TxProps } from "./shared";
+import { amountColor, effective, groupByDay, money, shortDay, weekday, type TxProps } from "./shared";
 
 type Item = { kind: "day"; key: string; date: string } | { kind: "row"; key: string; row: TransactionRow };
 
@@ -74,11 +74,11 @@ export function VariantB(p: TxProps) {
             );
           }
           const r = item.row;
-          const label = pixLabel(r.description, r.amount, { style: "full" });
+          const label = pixLabel(r.description, effective(r), { style: "full" });
           const cat = r.category && r.category !== "other" ? r.category : undefined;
           const acc = accountById.get(r.accountId);
           const where = acc ? sourceLabel(acc) : r.accountName;
-          const glyph = label.name ? label.name.charAt(0).toUpperCase() : cat ? categoryLabel[cat].icon : r.amount < 0 ? "↑" : "↓";
+          const glyph = label.name ? label.name.charAt(0).toUpperCase() : cat ? categoryLabel[cat].icon : effective(r) < 0 ? "↑" : "↓";
           return (
             <Pressable onPress={() => p.onEdit(r)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 10 }}>
               <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: c.track, alignItems: "center", justifyContent: "center" }}>
@@ -93,7 +93,7 @@ export function VariantB(p: TxProps) {
                   {cat ? ` · ${categoryLabel[cat].name}` : ""}
                 </Text>
               </View>
-              <Text style={{ fontFamily: font.medium, fontSize: 16, color: r.amount < 0 ? c.ink : colors.pos }}>{brl.format(r.amount)}</Text>
+              <Text style={{ fontFamily: font.medium, fontSize: 16, color: amountColor(r, c, colors.pos) }}>{money(r)}</Text>
             </Pressable>
           );
         }}

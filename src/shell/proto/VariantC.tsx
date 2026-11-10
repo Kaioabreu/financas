@@ -8,7 +8,7 @@ import { pixLabel } from "../pixLabel";
 import { sourceLabel } from "../sourceLabel";
 import { Button, font, usePalette } from "../theme";
 import { FilterSheet } from "./FilterSheet";
-import { brl, type TxProps } from "./shared";
+import { amountColor, effective, money, type TxProps } from "./shared";
 
 type Tab = "all" | "out" | "in";
 const TABS: { key: Tab; label: string }[] = [
@@ -26,7 +26,7 @@ export function VariantC(p: TxProps) {
   const accountById = useMemo(() => new Map(p.accounts.map((a) => [a.id, a])), [p.accounts]);
   const data = useMemo(() => {
     const list = [...p.rows].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-    return tab === "out" ? list.filter((r) => r.amount < 0) : tab === "in" ? list.filter((r) => r.amount > 0) : list;
+    return tab === "out" ? list.filter((r) => r.nature === "expense") : tab === "in" ? list.filter((r) => r.nature === "income" || r.nature === "refund") : list;
   }, [p.rows, tab]);
   const filterName = p.category ? categoryLabel[p.category].name : p.days ? `Dias ${p.days.from} a ${p.days.to}` : undefined;
   const marked = p.sources.length > 0 || !!filterName;
@@ -70,7 +70,7 @@ export function VariantC(p: TxProps) {
         renderItem={({ item, index }) => {
           const prev = data[index - 1];
           const firstOfDay = !prev || prev.date !== item.date;
-          const label = pixLabel(item.description, item.amount, { style: "initial" });
+          const label = pixLabel(item.description, effective(item), { style: "initial" });
           const expanded = open === item.id;
           const acc = accountById.get(item.accountId);
           return (
@@ -85,7 +85,7 @@ export function VariantC(p: TxProps) {
                 <Text numberOfLines={expanded ? 2 : 1} style={{ flex: 1, fontFamily: font.regular, fontSize: 16, color: c.ink }}>
                   {label.title}
                 </Text>
-                <Text style={{ fontFamily: font.medium, fontSize: 16, color: item.amount < 0 ? c.ink : colors.pos }}>{brl.format(item.amount)}</Text>
+                <Text style={{ fontFamily: font.medium, fontSize: 16, color: amountColor(item, c, colors.pos) }}>{money(item)}</Text>
               </View>
               {expanded ? (
                 <View style={{ marginLeft: 36, marginTop: 8 }}>
