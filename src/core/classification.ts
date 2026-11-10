@@ -268,7 +268,9 @@ export function createClassification(deps: ClassificationDeps) {
     const docs = new Set<string>();
     for (const row of await db.select().from(identity)) {
       try {
-        const links = JSON.parse(row.extra ?? "{}").paychecksBankLink;
+        const extra = JSON.parse(row.extra ?? "{}");
+        // The real /identity nests the link under financialRelationships (older fixtures had it on top).
+        const links = extra.financialRelationships?.paychecksBankLink ?? extra.paychecksBankLink;
         for (const link of Array.isArray(links) ? links : []) {
           const d = digits(link?.employerDocument);
           if (d) docs.add(d);

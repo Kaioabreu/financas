@@ -159,7 +159,7 @@ export function identity(overrides: Record<string, unknown> = {}) {
     fullName: "Pessoa Sintética",
     document: "00000000000",
     documentType: "CPF",
-    paychecksBankLink: [] as unknown[],
+    financialRelationships: { paychecksBankLink: [] as unknown[] },
     ...overrides,
   };
 }
