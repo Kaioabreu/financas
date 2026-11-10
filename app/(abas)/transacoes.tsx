@@ -148,7 +148,7 @@ export default function Transacoes() {
           const cat = r.category && r.category !== "other" ? r.category : undefined;
           const acc = accountById.get(r.accountId);
           const where = acc ? sourceLabel(acc) : r.accountName;
-          const sub = [where, cat ? categoryLabel[cat].name : null, r.installment ? `${r.installment.number} de ${r.installment.total}` : null]
+          const sub = [where, cat ? categoryLabel[cat].name : null]
             .filter(Boolean)
             .join(" · ");
           return (
@@ -158,11 +158,14 @@ export default function Transacoes() {
                 <Text numberOfLines={1} style={{ fontFamily: font.medium, fontSize: 16, color: c.ink }}>
                   {label.title}
                 </Text>
-                <Text numberOfLines={1} style={{ fontFamily: font.regular, fontSize: 13.5, color: c.ink2 }}>
+                <Text numberOfLines={2} style={{ fontFamily: font.regular, fontSize: 13.5, color: c.ink2 }}>
                   {sub}
                 </Text>
               </View>
-              <Text style={{ fontFamily: font.medium, fontSize: 16, color: amountColor(flowOf(r), c, colors.pos) }}>{signedAmount(r)}</Text>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={{ fontFamily: font.medium, fontSize: 16, color: amountColor(flowOf(r), c, colors.pos) }}>{signedAmount(r)}</Text>
+                {r.installment ? (<Text style={{ fontFamily: font.regular, fontSize: 12.5, color: c.ink2 }}>{`${r.installment.number} de ${r.installment.total}`}</Text>) : null}
+              </View>
             </Pressable>
           );
         }}
