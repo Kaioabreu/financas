@@ -21,7 +21,6 @@ const CARD = "22222222-0000-0000-0000-000000000002";
 const NEVER = new Promise<void>(() => {});
 const USER_CPF = "52998224725"; // synthetic, valid check digits
 const EMPLOYER = "11222333000181"; // synthetic CNPJ
-const BANK_CNPJ = "99888777000155"; // synthetic CNPJ of the connected bank itself
 const tid = (n: number) => `44444444-0000-0000-0000-${String(n).padStart(12, "0")}`;
 
 let counter = 0;
@@ -183,8 +182,8 @@ describe("Classificação: salário", () => {
   const paycheck = [
     identity({ document: USER_CPF, financialRelationships: { paychecksBankLink: [{ employerDocument: EMPLOYER }] } }),
   ];
-  const bankIn = (description: string, operationType: string, payer: string) =>
-    bankTx({ description, type: "CREDIT", amount: 5000, operationType, ...party("payer", payer) });
+  const salaryIn = (description: string, operationType: string) =>
+    bankTx({ description, type: "CREDIT", amount: 5000, operationType, ...party("payer", EMPLOYER) });
 
   it("transferência cujo pagador é o empregador é Salário; o documento sozinho não basta", async () => {
     const w = await world({ identity: paycheck });
@@ -196,24 +195,23 @@ describe("Classificação: salário", () => {
     expect(rows["BOLETO EMPREGADOR"]).toMatchObject({ nature: "income", origin: "other-income" });
   });
 
-  it("o CNPJ do próprio banco (companiesCnpj, qualifications.companyCnpj ou paycheckBankCnpj) nunca é empregador, mesmo listado como employerDocument", async () => {
-    const w = await world({
-      identity: [
-        identity({
-          document: USER_CPF,
-          companiesCnpj: [BANK_CNPJ],
-          financialRelationships: { paychecksBankLink: [{ employerDocument: BANK_CNPJ, paycheckBankCnpj: BANK_CNPJ }] },
-        }),
-      ],
-    });
-    const rows = await w.read([bankIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO", BANK_CNPJ)]);
-    expect(rows.InternalTransfer.origin).not.toBe("salary");
+  it("o formato real do banco (TRANSFERENCIA_MESMA_INSTITUICAO, descrição InternalTransfer) também é Salário", async () => {
+    const w = await world({ identity: paycheck });
+    const rows = await w.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")]);
+    expect(rows.InternalTransfer).toMatchObject({ nature: "income", origin: "salary" });
   });
 
-  it("empresa que não é o banco só é Salário se o /identity a traz como empregador; companiesCnpj sozinho não basta", async () => {
-    const w = await world({ identity: [identity({ document: USER_CPF, companiesCnpj: [BANK_CNPJ] })] });
-    const rows = await w.read([bankIn("PIX DA EMPRESA", "PIX", EMPLOYER)]);
-    expect(rows["PIX DA EMPRESA"]).toMatchObject({ nature: "income", origin: "other-income" });
+  it("sem paychecksBankLink, o CNPJ da empresa em companiesCnpj ou qualifications.companyCnpj vale como empregador", async () => {
+    const viaCompanies = await world({ identity: [identity({ document: USER_CPF, companiesCnpj: [EMPLOYER] })] });
+    expect((await viaCompanies.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")])).InternalTransfer.origin).toBe("salary");
+    const viaQualifications = await world({ identity: [identity({ document: USER_CPF, qualifications: { companyCnpj: EMPLOYER } })] });
+    expect((await viaQualifications.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")])).InternalTransfer.origin).toBe("salary");
+  });
+
+  it("se o /identity não traz nenhum CNPJ, a entrada de empresa fica em Outras receitas (e o usuário pode criar uma regra)", async () => {
+    const w = await world();
+    const rows = await w.read([salaryIn("InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO")]);
+    expect(rows.InternalTransfer).toMatchObject({ nature: "income", origin: "other-income" });
   });
 
   it("FOLHA_PAGAMENTO e Income > Salary também são Salário", async () => {
@@ -224,29 +222,6 @@ describe("Classificação: salário", () => {
     ]);
     expect(rows.FOLHA.origin).toBe("salary");
     expect(rows["CATEGORIA SALARIO"].origin).toBe("salary");
-  });
-});
-
-describe("Classificação: transferência entre contas do mesmo banco", () => {
-  const ident = [identity({ document: USER_CPF, companiesCnpj: [BANK_CNPJ], qualifications: { companyCnpj: BANK_CNPJ } })];
-  it("entrada em que o pagador é o CNPJ do próprio banco (TRANSFERENCIA_MESMA_INSTITUICAO) é transferência própria, não receita", async () => {
-    const w = await world({ identity: ident });
-    const rows = await w.read([
-      bankTx({ description: "InternalTransfer", type: "CREDIT", amount: 800, operationType: "TRANSFERENCIA_MESMA_INSTITUICAO", ...party("payer", BANK_CNPJ) }),
-      bankTx({ description: "Tef", type: "CREDIT", amount: 300, operationType: "TRANSFERENCIA_MESMA_INSTITUICAO", ...party("payer", BANK_CNPJ) }),
-    ]);
-    expect(rows.InternalTransfer.nature).toBe("own-transfer");
-    expect(rows.Tef.nature).toBe("own-transfer");
-  });
-
-  it("o CNPJ de outro pagador, ou o do banco em outro tipo de operação, segue como receita", async () => {
-    const w = await world({ identity: ident });
-    const rows = await w.read([
-      bankTx({ description: "OUTRA EMPRESA", type: "CREDIT", amount: 800, operationType: "TRANSFERENCIA_MESMA_INSTITUICAO", ...party("payer", EMPLOYER) }),
-      bankTx({ description: "CASHBACK DO BANCO", type: "CREDIT", amount: 3, operationType: "OUTROS", ...party("payer", BANK_CNPJ) }),
-    ]);
-    expect(rows["OUTRA EMPRESA"]).toMatchObject({ nature: "income", origin: "other-income" });
-    expect(rows["CASHBACK DO BANCO"].nature).toBe("income");
   });
 });
 

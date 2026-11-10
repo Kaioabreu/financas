@@ -42,8 +42,6 @@ export interface EmbeddedConfig {
   billPaymentToleranceDays: number;
   /** Pluggy operationTypes that count as a transfer when the payer is the employer. */
   salaryTransferOperationTypes: string[];
-  /** Pluggy operationTypes of a move between accounts of the same bank (payer = the bank's own CNPJ). */
-  sameInstitutionOperationTypes: string[];
   /** Pluggy operationTypes that are salary by themselves. */
   salaryOperationTypes: string[];
   /** Pluggy categories (normalized) that are salary by themselves. */
@@ -108,7 +106,6 @@ export const embeddedConfig: EmbeddedConfig = {
   },
   billPaymentToleranceDays: 3,
   salaryTransferOperationTypes: ["InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO", "TED", "DOC", "PIX"],
-  sameInstitutionOperationTypes: ["TRANSFERENCIA_MESMA_INSTITUICAO"],
   salaryOperationTypes: ["FOLHA_PAGAMENTO"],
   salaryCategories: ["salary", "salario"],
   gapBanks: ["BTG", "Mercado Pago", "Nubank"],

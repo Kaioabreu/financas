@@ -119,8 +119,6 @@ interface Context {
   config: EmbeddedConfig;
   cpf: string | null;
   employerDocs: Set<string>;
-  /** CNPJs of the connected banks themselves. */
-  bankDocs: Set<string>;
   /** Account debits that paid a card bill in the app. */
   matchedBillPayments: Set<string>;
   /** Newest first. */
@@ -226,13 +224,7 @@ function deduce(r: Row, ctx: Context, credit: boolean): Classification {
       return category ? { nature: "refund", category } : { nature: "refund" };
     }
   }
-  // Own transfer. Between the holder's accounts at the same bank, the payer is the bank's own CNPJ.
-  if (
-    credit && !r.card && counterpart !== "" && ctx.bankDocs.has(counterpart) &&
-    config.sameInstitutionOperationTypes.includes(r.operationType ?? "")
-  ) {
-    return { nature: "own-transfer" };
-  }
+  // Own transfer.
   if (ctx.cpf && counterpart === ctx.cpf) return { nature: "own-transfer" };
 
   // 3. No signal: money in from a third party is income, money out is an expense
@@ -272,35 +264,28 @@ export function createClassification(deps: ClassificationDeps) {
     return { state: "known", cpf: [...found][0]!, source: "identity" };
   }
 
-  /**
-   * From the /identity of each Connection: the employer CNPJs (paychecksBankLink) and the CNPJs of the
-   * bank itself (companiesCnpj, qualifications.companyCnpj, paycheckBankCnpj). The real /identity may
-   * bring the bank as "employer" (employerDocument equal to the bank's own CNPJ), so a bank CNPJ is never an employer.
-   */
-  async function identityDocs(): Promise<{ employer: Set<string>; bank: Set<string> }> {
-    const employer = new Set<string>();
-    const bank = new Set<string>();
+  async function employerDocs(): Promise<Set<string>> {
+    const docs = new Set<string>();
     for (const row of await db.select().from(identity)) {
       try {
         const extra = JSON.parse(row.extra ?? "{}");
-        for (const cnpj of [...(Array.isArray(extra.companiesCnpj) ? extra.companiesCnpj : []), extra.qualifications?.companyCnpj]) {
-          const d = digits(cnpj);
-          if (d.length === 14) bank.add(d);
-        }
-        // The real /identity nests the link under financialRelationships.
+        // The real /identity nests the link under financialRelationships (older fixtures had it on top).
         const links = extra.financialRelationships?.paychecksBankLink ?? extra.paychecksBankLink;
         for (const link of Array.isArray(links) ? links : []) {
           const d = digits(link?.employerDocument);
-          if (d) employer.add(d);
-          const own = digits(link?.paycheckBankCnpj);
-          if (own) bank.add(own);
+          if (d) docs.add(d);
+        }
+        // The company CNPJ the holder declared also counts, for banks that bring no paycheck link.
+        const companies = Array.isArray(extra.companiesCnpj) ? extra.companiesCnpj : [];
+        for (const cnpj of [...companies, extra.qualifications?.companyCnpj]) {
+          const d = digits(cnpj);
+          if (d.length === 14) docs.add(d);
         }
       } catch {
-        // an unreadable Identity just brings no documents
+        // an unreadable Identity just brings no employer
       }
     }
-    for (const d of bank) employer.delete(d);
-    return { employer, bank };
+    return docs;
   }
 
   async function loadUserRules(): Promise<UserRule[]> {
@@ -480,12 +465,10 @@ export function createClassification(deps: ClassificationDeps) {
     {
       const rows = await loadRows();
       const status = await cpfStatus();
-      const docs = await identityDocs();
       const ctx: Context = {
         config,
         cpf: status.state === "known" ? status.cpf : null,
-        employerDocs: docs.employer,
-        bankDocs: docs.bank,
+        employerDocs: await employerDocs(),
         matchedBillPayments: matchBillPayments(rows),
         userRules: await loadUserRules(),
         plan: await buildInstallmentPlan(db),
