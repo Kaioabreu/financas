@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
   account,
@@ -66,6 +67,42 @@ type World = Awaited<ReturnType<typeof world>>;
 const october = (w: World) => w.core.listTransactions({ accountId: BANK, month: "2026-10" });
 const callsStarting = (w: World, prefix: string) => w.fetch.calls.filter((c) => c.method === "GET" && c.url.startsWith(prefix));
 const accountReads = (w: World) => callsStarting(w, `${API}/accounts`).length;
+
+describe("Sincronização: nome do banco da Conexão", () => {
+  it("antes da primeira leitura a Conexão é 'Conta 1', nunca o nome do agregador", async () => {
+    const w = await world();
+    expect((await w.core.listConnections())[0]!.bankName).toBe("Conta 1");
+  });
+
+  it("a primeira leitura nomeia a Conexão pelo código do banco da conta", async () => {
+    const w = await world();
+    w.fetch.on("GET", `${API}/accounts`, { body: page([account({ bankData: { transferNumber: "208/0001/00000-0" } as never }), creditCard()]) });
+    w.setTxs([tx(1)]);
+    await w.core.readConnection(ITEM_ID);
+    expect((await w.core.listConnections())[0]!.bankName).toBe("BTG Pactual");
+  });
+
+  it("uma Conexão com dois bancos junta os nomes distintos", async () => {
+    const w = await world();
+    const other = account({ id: "22222222-0000-0000-0000-000000000009", bankData: { transferNumber: "260/0001/00000-0" } as never });
+    w.fetch.on("GET", `${API}/accounts`, { body: page([account({ bankData: { transferNumber: "208/0001/00000-0" } as never }), other]) });
+    w.setTxs([tx(1)]);
+    await w.core.readConnection(ITEM_ID);
+    expect((await w.core.listConnections())[0]!.bankName).toBe("BTG Pactual e Nubank");
+  });
+
+  it("uma Conexão antiga com o nome do agregador é corrigida na próxima leitura, sem dado novo", async () => {
+    const w = await world();
+    w.fetch.on("GET", `${API}/accounts`, { body: page([account({ bankData: { transferNumber: "323/0001/00000-0" } as never })]) });
+    w.setTxs([tx(1)]);
+    await w.core.readConnection(ITEM_ID);
+    await w.db.run(sql`UPDATE connection SET bank_name = 'MeuPluggy'`);
+
+    await w.core.sync({ manual: true });
+
+    expect((await w.core.listConnections())[0]!.bankName).toBe("Mercado Pago");
+  });
+});
 
 describe("Sincronização: quando ler", () => {
   it("só lê quando o lastUpdatedAt é mais novo que a última leitura completa", async () => {
@@ -189,7 +226,7 @@ describe("Sincronização: tudo ou nada", () => {
     const rows = await october(w);
     expect(rows.map((r) => r.description)).toEqual(["COMPRA 1"]);
     expect((await w.core.listConnections())[0]).toMatchObject({ dataAt: "2026-11-01T06:00:00.000Z" });
-    expect(report.notices).toEqual([{ itemId: ITEM_ID, message: "Não deu para atualizar o MeuPluggy agora" }]);
+    expect(report.notices).toEqual([{ itemId: ITEM_ID, message: "Não deu para atualizar o Conta Sintética agora" }]);
   });
 
   it("cada requisição é tentada mais 2 vezes", async () => {
@@ -343,7 +380,7 @@ describe("Sincronização: Conexões independentes e avisos", () => {
     const report = await w.core.sync({ manual: true });
 
     expect(await october(w)).toHaveLength(2);
-    expect(report.notices).toEqual([{ itemId: SECOND, message: "Não deu para atualizar o BTG agora" }]);
+    expect(report.notices).toEqual([{ itemId: SECOND, message: "Não deu para atualizar o Conta Sintética agora" }]);
   });
 
   it("ao só abrir o app nenhum aviso aparece", async () => {

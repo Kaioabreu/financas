@@ -65,7 +65,7 @@ describe("Copiar diagnóstico", () => {
     expect(text).toContain("App 1.2.3");
     expect(text).toContain("atualização ota-abc");
     expect(text).toContain("/auth: HTTP 200");
-    expect(text).toContain("Conexão 1: MeuPluggy");
+    expect(text).toContain("Conexão 1: Conta Sintética");
     expect(text).toContain("status UPDATED");
     expect(text).toContain("execução PARTIAL_SUCCESS");
     expect(text).toContain("transactions=não");

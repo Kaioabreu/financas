@@ -10,6 +10,7 @@ import {
   investment,
   investmentTransaction,
 } from "../db/schema";
+import { deriveBankName } from "./bankName";
 import type { EmbeddedConfig } from "./config";
 import { isExpired } from "./connections";
 import type { CoreDatabase } from "./createCore";
@@ -139,6 +140,7 @@ export function createSync(deps: Deps): SyncApi {
   async function mirrorRead(itemId: string, force: boolean): Promise<void> {
     const [conn] = await db.select().from(connection).where(eq(connection.itemId, itemId));
     if (!conn) return;
+    await refreshBankName(itemId); // also fixes a Connection saved with the aggregator's name
 
     const itemResponse = await call(`/items/${itemId}`);
     if (itemResponse.status === 404) {
@@ -323,6 +325,7 @@ export function createSync(deps: Deps): SyncApi {
         const now = await db.select({ id: bankTransaction.id }).from(bankTransaction);
         await deps.moveEdits(now.map((t) => t.id).filter((id) => !knownIds.has(id)));
       }
+      await refreshBankName(itemId);
       if (fetchedIdentity) await upsertIdentity(fetchedIdentity, itemId);
       if (!locked) await deps.takeSnapshot?.(itemId, unavailable);
       await setConnection(
@@ -339,6 +342,18 @@ export function createSync(deps: Deps): SyncApi {
             },
       );
     });
+  }
+
+  /** The Connection's name, from the accounts held for it (see deriveBankName). */
+  async function refreshBankName(itemId: string) {
+    const rows = await db.select().from(account).where(eq(account.itemId, itemId));
+    if (!rows.length) return;
+    const position = (await db.select({ itemId: connection.itemId }).from(connection)).findIndex((c) => c.itemId === itemId) + 1;
+    const bankName = deriveBankName(
+      rows.map((r) => ({ type: r.type, name: r.name, transferNumber: (r.extra ? JSON.parse(r.extra).bankData?.transferNumber : null) ?? null })),
+      position,
+    );
+    await setConnection(itemId, { bankName });
   }
 
   async function removeInChunks(plan: Plan) {
