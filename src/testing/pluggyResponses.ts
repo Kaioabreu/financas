@@ -81,6 +81,7 @@ function baseBill() {
     minimumPaymentAmount: 25,
     allowsInstallments: true,
     financeCharges: [] as unknown[],
+    billClosingDate: undefined as string | undefined,
   };
 }
 export function bill(overrides: Partial<ReturnType<typeof baseBill>> = {}) {

@@ -422,7 +422,7 @@ export function createSync(deps: Deps): SyncApi {
       totalAmount: b.totalAmount ?? null,
       currencyCode: b.totalAmountCurrencyCode ?? null,
       minimumPaymentAmount: b.minimumPaymentAmount ?? null,
-      extra: JSON.stringify({ allowsInstallments: b.allowsInstallments, financeCharges: b.financeCharges, payments: b.payments }),
+      extra: JSON.stringify({ billClosingDate: b.billClosingDate, allowsInstallments: b.allowsInstallments, financeCharges: b.financeCharges, payments: b.payments }),
     };
     await db.insert(bill).values(values).onConflictDoUpdate({ target: bill.id, set: values });
   }

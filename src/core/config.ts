@@ -48,7 +48,7 @@ export interface EmbeddedConfig {
   salaryCategories: string[];
   /** Banks whose bill check is validated: only these show the Lacuna note (OTA-updatable). */
   gapBanks: string[];
-  /** A bill closes this many days before its due date (Pluggy sends no closing date per bill). */
+  /** Fallback only: a bill closes this many days before its due date when Pluggy sends no billClosingDate. */
   billClosingDaysBeforeDue: number;
 }
 
@@ -106,6 +106,9 @@ export const embeddedConfig: EmbeddedConfig = {
   salaryTransferOperationTypes: ["InternalTransfer", "TRANSFERENCIA_MESMA_INSTITUICAO", "TED", "DOC", "PIX"],
   salaryOperationTypes: ["FOLHA_PAGAMENTO"],
   salaryCategories: ["salary", "salario"],
-  gapBanks: ["BTG", "Mercado Pago", "Nubank"],
+  // BTG is out on purpose: Pluggy's BTG bill totalAmount is not the real invoice total (checked against the
+  // author's invoice spreadsheet: a ~6.4k invoice comes as ~1.35k), so it raised false gaps every month.
+  // A bank stays here only while its bills reconcile on real data.
+  gapBanks: ["Mercado Pago", "Nubank"],
   billClosingDaysBeforeDue: 7,
 };

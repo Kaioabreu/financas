@@ -1,5 +1,7 @@
 // Core: Faturas e Lacuna. For each closed bill of a card it checks that the card transactions
 // add up to the bill's totalAmount minus the previous bill's. Whatever is missing is the Lacuna.
+// Which bill a transaction belongs to comes from creditCardMetadata.billId (Pluggy's own link), never
+// from dates; the closing date (billClosingDate) only gives the cycle shown and sorts a payment into a bill.
 // A pure function of what is stored, redone on every read, so a Lacuna vanishes as soon as Pluggy
 // delivers what was missing. Nothing here enters the numbers of the Resumo or Gastos.
 import { account, bankTransaction, bill, connection } from "../db/schema";
@@ -82,7 +84,14 @@ export function createBills(deps: { db: CoreDatabase; config: EmbeddedConfig; cl
     const allBills = await db.select().from(bill);
     const txs = await db.select().from(bankTransaction);
     const plan = await buildInstallmentPlan(db);
-    const closeOf = (dueDate: string) => addDays(dueDate.slice(0, 10), -config.billClosingDaysBeforeDue);
+    // The cycle's last day: Pluggy's billClosingDate (the source of truth for the cycle), else the guess.
+    const closeOf = (b: typeof bill.$inferSelect) => {
+      let sent: unknown;
+      try {
+        sent = b.extra ? JSON.parse(b.extra).billClosingDate : undefined;
+      } catch {}
+      return typeof sent === "string" && /^\d{4}-\d{2}-\d{2}/.test(sent) ? sent.slice(0, 10) : addDays(b.dueDate.slice(0, 10), -config.billClosingDaysBeforeDue);
+    };
 
     const result: CardCheck[] = [];
     for (const card of accounts.filter((a) => a.type === "CREDIT")) {
@@ -101,7 +110,7 @@ export function createBills(deps: { db: CoreDatabase; config: EmbeddedConfig; cl
         if (at === undefined) continue;
         const value = t.amountInAccountCurrency ?? t.amount;
         const isCredit = t.type ? t.type === "CREDIT" : value < 0;
-        if (isCredit && isPaymentSignal(t.category, t.operationType) && t.date.slice(0, 10) > closeOf(bills[at]!.dueDate)) at += 1;
+        if (isCredit && isPaymentSignal(t.category, t.operationType) && t.date.slice(0, 10) > closeOf(bills[at]!)) at += 1;
         if (at >= bills.length) continue;
         sums[at]! += isCredit ? -Math.abs(cents(value)) : Math.abs(cents(value));
       }
@@ -112,8 +121,8 @@ export function createBills(deps: { db: CoreDatabase; config: EmbeddedConfig; cl
         const previous = bills[i - 1]!;
         if (b.dueDate.slice(0, 10) > today || b.totalAmount === null || previous.totalAmount === null) continue;
         const gapCents = cents(b.totalAmount) - cents(previous.totalAmount) - sums[i]!;
-        const from = addDays(closeOf(previous.dueDate), 1);
-        const to = closeOf(b.dueDate);
+        const from = addDays(closeOf(previous), 1);
+        const to = closeOf(b);
         checks.push({ billId: b.id, gapCents, from, to, ...(gapCents > 0 ? { installment: missingParcel(cardTxs, plan, gapCents, from, to) } : {}) });
       }
       result.push({ accountId: card.id, cardName: card.name, validated, checks });

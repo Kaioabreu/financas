@@ -69,14 +69,14 @@ const parcel = (k: number, total: number, amount: number, purchase: string, bill
 /** b2 is matched by one purchase of 300 unless the test says otherwise. */
 const b2ok = () => buy(300, "2026-09-10", "b2");
 
-async function world(state: { txs: object[]; cardName?: string }) {
+async function world(state: { txs: object[]; cardName?: string; bills?: object[] }) {
   const w = await createTestWorld();
   w.fetch.on("POST", `${API}/auth`, { body: authResponse() });
   await w.core.saveCredentials({ clientId: SYNTHETIC_CLIENT_ID, clientSecret: SYNTHETIC_CLIENT_SECRET });
   w.fetch.on("GET", `${API}/items/${ITEM_ID}`, () => ({ body: item() }));
-  w.fetch.on("GET", `${API}/accounts`, () => ({ body: page([creditCard({ name: state.cardName ?? "Cartão BTG" })]) }));
+  w.fetch.on("GET", `${API}/accounts`, () => ({ body: page([creditCard({ name: state.cardName ?? "Cartão Nubank" })]) }));
   w.fetch.on("GET", `${API}/v2/transactions`, () => ({ body: { results: state.txs, next: null } }));
-  w.fetch.on("GET", `${API}/bills`, { body: page(BILLS) });
+  w.fetch.on("GET", `${API}/bills`, () => ({ body: page(state.bills ?? BILLS) }));
   w.fetch.on("GET", `${API}/investments`, { body: page([]) });
   w.fetch.on("GET", `${API}/identity`, { body: page([identity()]) });
   await w.core.finishConnect(ITEM_ID, { tabClosed: NEVER });
@@ -95,8 +95,8 @@ describe("Lacuna: a conta da fatura", () => {
   it("a fatura que não bate mostra o valor exato e o ciclo", async () => {
     const w = await world({ txs: [b2ok(), buy(150, "2026-10-02", "b3")] });
     const [gap] = await gapsOf(w);
-    expect(gap).toMatchObject({ amount: 50, kind: "missing", from: "2026-09-29", to: "2026-10-29", cardName: "Cartão BTG" });
-    expect(gap!.text).toBe("Faltam R$ 50,00 do Cartão BTG, compras de 29/09 a 29/10");
+    expect(gap).toMatchObject({ amount: 50, kind: "missing", from: "2026-09-29", to: "2026-10-29", cardName: "Cartão Nubank" });
+    expect(gap!.text).toBe("Faltam R$ 50,00 do Cartão Nubank, compras de 29/09 a 29/10");
   });
 
   it("a nota aparece em cada mês que o ciclo toca, e só nele", async () => {
@@ -117,7 +117,7 @@ describe("Lacuna: a conta da fatura", () => {
     const w = await world({ txs: [b2ok(), buy(250, "2026-10-02", "b3")] });
     const [gap] = await gapsOf(w);
     expect(gap).toMatchObject({ amount: 50, kind: "extra" });
-    expect(gap!.text).toBe("Há R$ 50,00 a mais no Cartão BTG, compras de 29/09 a 29/10");
+    expect(gap!.text).toBe("Há R$ 50,00 a mais no Cartão Nubank, compras de 29/09 a 29/10");
   });
 
   it("correção: a parcela adiantada vai para a fatura do seu desconto", async () => {
@@ -202,6 +202,48 @@ describe("Lacuna: a conta da fatura", () => {
     state.txs.push(buy(50, "2026-10-20", "b3"));
     await w.core.readConnection(ITEM_ID);
     expect(await gapsOf(w)).toEqual([]);
+  });
+
+  describe("fechamento que varia, vindo do Pluggy", () => {
+    // Closings 26/08, 26/09, 27/10 (the 7-day guess would say 25/08, 24/09, 25/10).
+    const VARIABLE = [
+      bill({ id: "b1", dueDate: day("2026-09-01"), totalAmount: 500, billClosingDate: day("2026-08-26") }),
+      bill({ id: "b2", dueDate: day("2026-10-01"), totalAmount: 800, billClosingDate: day("2026-09-26") }),
+      bill({ id: "b3", dueDate: day("2026-11-01"), totalAmount: 1000, billClosingDate: day("2026-10-27") }),
+    ];
+
+    it("o ciclo vai do dia seguinte ao fechamento anterior até o fechamento da fatura", async () => {
+      const w = await world({ bills: VARIABLE, txs: [b2ok(), buy(150, "2026-10-02", "b3")] });
+      const [gap] = await gapsOf(w);
+      expect(gap).toMatchObject({ amount: 50, from: "2026-09-27", to: "2026-10-27" });
+      expect(gap!.text).toBe("Faltam R$ 50,00 do Cartão Nubank, compras de 27/09 a 27/10");
+    });
+
+    it("o pagamento antes do fechamento real, mas depois do palpite de 7 dias, fica na própria fatura e a lacuna some", async () => {
+      const w = await world({
+        bills: VARIABLE,
+        txs: [
+          buy(600, "2026-09-10", "b2"),
+          credit("PAGAMENTO RECEBIDO", 300, "2026-09-25", "b2", { category: "Credit card payment" }),
+          buy(200, "2026-10-02", "b3"),
+        ],
+      });
+      expect(await w.core.billGaps({ month: "2026-09" })).toEqual([]);
+      expect(await gapsOf(w)).toEqual([]);
+    });
+
+    it("sem billClosingDate numa fatura, vale o palpite de 7 dias antes do vencimento", async () => {
+      const bills = [VARIABLE[0], VARIABLE[1], bill({ id: "b3", dueDate: day("2026-11-01"), totalAmount: 1000 })];
+      const w = await world({ bills, txs: [b2ok(), buy(150, "2026-10-02", "b3")] });
+      const [gap] = await gapsOf(w);
+      expect(gap).toMatchObject({ from: "2026-09-27", to: "2026-10-25" }); // 01/11 minus 7 days
+    });
+  });
+
+  it("BTG fica fora: o totalAmount do Pluggy não é o total real, então nenhuma nota, só contagens", async () => {
+    const w = await world({ txs: [b2ok(), buy(150, "2026-10-02", "b3")], cardName: "Cartão BTG" });
+    expect(await w.core.billGaps({ month: "2026-10" })).toEqual([]);
+    expect(await w.core.diagnostic()).toContain("Cartão 1: faturas verificadas 2 · batem 1 · não batem 1");
   });
 
   it("banco fora da lista: nenhuma nota, só contagens no diagnóstico", async () => {
