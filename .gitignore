@@ -20,3 +20,7 @@ dist/
 *.pdf
 data/
 .pluggy-dump/
+
+# Gerado pelo prebuild
+android/
+ios/
