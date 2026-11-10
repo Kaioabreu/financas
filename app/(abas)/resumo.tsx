@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import type { BillGap } from "../../src/core/bills";
 import { embeddedConfig } from "../../src/core/config";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NoticeQueue } from "../../src/core/status";
@@ -11,8 +11,9 @@ import type { MonthPoint, MonthSummary } from "../../src/core/summary";
 import { useLiveData } from "../../src/shell/useLiveData";
 import { useCore } from "../../src/shell/appCore";
 import { useChartColors } from "../../src/shell/chartColors";
-import { money, moneyRound, signedMoney } from "../../src/shell/format";
+import { money, signedMoney } from "../../src/shell/format";
 import { MonthBar } from "../../src/shell/MonthBar";
+import { barHeight, chartEnd } from "../../src/shell/sixMonths";
 import { monthLabel, useMonth } from "../../src/shell/month";
 import { originLabel } from "../../src/shell/labels";
 import { Body, Fine, font, LinkText, usePalette } from "../../src/shell/theme";
@@ -24,7 +25,9 @@ export default function Resumo() {
   const c = usePalette();
   const colors = useChartColors();
   const insets = useSafeAreaInsets();
-  const { month } = useMonth();
+  const { month, setMonth } = useMonth();
+  const endRef = useRef<string | null>(null);
+  const windowRef = useRef<string[]>([]);
   const [summary, setSummary] = useState<MonthSummary | null>(null);
   const [history, setHistory] = useState<MonthPoint[]>([]);
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
@@ -33,8 +36,11 @@ export default function Resumo() {
   const router = useRouter();
 
   useLiveData(async (alive) => {
-    const [s, h, conns, q, g] = await Promise.all([core.monthSummary(month), core.monthHistory(month, 6), core.listConnections(), core.notices(), core.billGaps({ month })]);
+    const end = chartEnd(endRef.current, month, windowRef.current);
+    const [s, h, conns, q, g] = await Promise.all([core.monthSummary(month), core.monthHistory(end, 6), core.listConnections(), core.notices(), core.billGaps({ month })]);
     if (alive()) {
+      endRef.current = end;
+      windowRef.current = h.map((p) => p.month);
       setSummary(s);
       setHistory(h);
       setConnections(conns);
@@ -46,6 +52,7 @@ export default function Resumo() {
   const monthName = monthLabel(month).split(" de ")[0];
   const peak = Math.max(1, ...history.flatMap((p) => [p.income, p.expenses]));
   const BAR_H = 110;
+  const picked = history.find((p) => p.month === month);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>
@@ -116,27 +123,40 @@ export default function Resumo() {
             </View>
 
             <Text style={{ fontFamily: font.semibold, fontSize: 16, color: c.ink, marginTop: 28 }}>Seis meses</Text>
-            <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginTop: 12 }}>
+            {picked ? (
+              <View style={{ marginTop: 8, minHeight: 56 }}>
+                <Text style={{ fontFamily: font.semibold, fontSize: 22, color: picked.balance < 0 ? c.neg : c.ink }}>{signedMoney(picked.balance)}</Text>
+                <Fine>{`Saldo de ${monthLabel(picked.month)}`}</Fine>
+              </View>
+            ) : null}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
               {history.map((p) => {
                 const on = p.month === month;
-                const [, m] = p.month.split("-").map(Number) as [number, number];
+                const [y, m] = p.month.split("-").map(Number) as [number, number];
                 return (
-                  <View key={p.month} style={{ alignItems: "center", flex: 1 }}>
-                    <Text style={{ fontFamily: font.medium, fontSize: 11.5, color: on ? c.ink : "transparent", marginBottom: 4 }}>
-                      {moneyRound(p.balance)}
-                    </Text>
-                    <View style={{ height: BAR_H, flexDirection: "row", alignItems: "flex-end", gap: 2 }}>
-                      <View style={{ width: 9, height: Math.max(1, (BAR_H * p.income) / peak), backgroundColor: c.ink, opacity: on ? 1 : 0.35, borderRadius: 3 }} />
-                      <View style={{ width: 9, height: Math.max(1, (BAR_H * p.expenses) / peak), backgroundColor: c.neg, opacity: on ? 1 : 0.45, borderRadius: 3 }} />
+                  <Pressable
+                    key={p.month}
+                    onPress={() => setMonth(p.month)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={`${monthLabel(p.month)}: receitas ${money(p.income)}, gastos ${money(p.expenses)}. Toque para ver este mês.`}
+                    style={{ flex: 1, minHeight: 44, alignItems: "center", justifyContent: "flex-end", paddingTop: 8, paddingBottom: 6, borderRadius: 8, backgroundColor: on ? c.track : "transparent" }}
+                  >
+                    <View style={{ height: BAR_H, flexDirection: "row", alignItems: "flex-end", gap: 3 }}>
+                      <View style={{ width: 11, height: barHeight(p.income, peak, BAR_H), backgroundColor: colors.income, opacity: on ? 1 : 0.6, borderRadius: 3 }} />
+                      <View style={{ width: 11, height: barHeight(p.expenses, peak, BAR_H), backgroundColor: colors.expense, opacity: on ? 1 : 0.6, borderRadius: 3 }} />
                     </View>
-                    <Text style={{ fontFamily: font.regular, fontSize: 12, color: on ? c.ink : c.ink2, marginTop: 6 }}>{SHORT[m - 1]}</Text>
-                  </View>
+                    <Text numberOfLines={1} style={{ fontFamily: on ? font.semibold : font.regular, fontSize: 12, color: on ? c.ink : c.ink2, marginTop: 6 }}>
+                      {SHORT[m - 1]}
+                    </Text>
+                    {m === 1 || p === history[0] ? <Text style={{ fontFamily: font.regular, fontSize: 10, color: c.ink2 }}>{y}</Text> : null}
+                  </Pressable>
                 );
               })}
             </View>
             <View style={{ flexDirection: "row", gap: 16, marginTop: 10 }}>
-              <Legend color={c.ink} label="Receitas" />
-              <Legend color={c.neg} label="Gastos" />
+              <Legend color={colors.income} label="Receitas" />
+              <Legend color={colors.expense} label="Gastos" />
             </View>
           </>
         ) : (
