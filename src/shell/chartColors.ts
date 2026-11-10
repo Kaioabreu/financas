@@ -6,10 +6,12 @@ import type { AppCategory } from "../core/classification";
 const light = {
   transport: "#2D62B0", food: "#B8325A", shopping: "#B07A0A", health: "#0E8AA6", travel: "#C0622B", leisure: "#7650B0", groceries: "#2F8A5F", other: "#8B9196",
   pos: "#1E7A4C",
+  income: "#1F5FBF", expense: "#CC2F2F",
 };
 const dark = {
   transport: "#5B8FE0", food: "#E0577F", shopping: "#B88517", health: "#1C9AB4", travel: "#D06E3A", leisure: "#9C7BDB", groceries: "#46A877", other: "#80878E",
   pos: "#4CC38A",
+  income: "#5B9BFF", expense: "#FF6B63",
 };
 
 export type ChartColors = typeof light;
