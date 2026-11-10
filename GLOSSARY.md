@@ -56,6 +56,7 @@ _Código_: `Nature`
 **Categoria**:
 O assunto de um gasto (Mercado, Transporte…), escolhido de uma lista fixa do app. Só gastos e reembolsos têm categoria; no reembolso ela é opcional.
 _Código_: `Category`
+De onde vem, para um gasto sem regra: a categoria do Pluggy (id ou nome) mapeada para uma das 11; sem mapa, Outros. A tabela completa está em `docs/categorias-pluggy.md`.
 
 **Fatura**:
 O conjunto de compras de um cartão cobradas num mesmo vencimento. Ela não decide em que mês um gasto conta: a compra conta no mês em que foi feita. O ciclo da fatura termina no `billClosingDate` que o Pluggy manda (começa no dia seguinte ao fechamento da anterior); só sem ele vale o palpite de 7 dias antes do vencimento. A fatura de cada compra vem do `creditCardMetadata.billId`, não das datas. A Lacuna só é conferida nos bancos cujo `totalAmount` bate com a fatura real (Mercado Pago e Nubank); o do BTG não é o total real da fatura, então o BTG fica de fora e só aparece nas contagens do diagnóstico.
