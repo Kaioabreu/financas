@@ -268,10 +268,18 @@ export function createClassification(deps: ClassificationDeps) {
     const docs = new Set<string>();
     for (const row of await db.select().from(identity)) {
       try {
-        const links = JSON.parse(row.extra ?? "{}").paychecksBankLink;
+        const extra = JSON.parse(row.extra ?? "{}");
+        // The real /identity nests the link under financialRelationships (older fixtures had it on top).
+        const links = extra.financialRelationships?.paychecksBankLink ?? extra.paychecksBankLink;
         for (const link of Array.isArray(links) ? links : []) {
           const d = digits(link?.employerDocument);
           if (d) docs.add(d);
+        }
+        // The company CNPJ the holder declared also counts, for banks that bring no paycheck link.
+        const companies = Array.isArray(extra.companiesCnpj) ? extra.companiesCnpj : [];
+        for (const cnpj of [...companies, extra.qualifications?.companyCnpj]) {
+          const d = digits(cnpj);
+          if (d.length === 14) docs.add(d);
         }
       } catch {
         // an unreadable Identity just brings no employer

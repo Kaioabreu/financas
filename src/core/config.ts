@@ -66,7 +66,9 @@ export const embeddedConfig: EmbeddedConfig = {
   maxRetryAfterMs: 60_000,
   builtInRules: [
     { contains: "CONTA REMUNERADA - APLICACAO AUTOMATICA", nature: "own-transfer" },
-    { contains: "CONTA REMUNERADA - RESGATE AUTOMATICO", nature: "own-transfer" },
+    { contains: "CONTA REMUNERADA - RESGATE APLICACAO", nature: "own-transfer" },
+    { contains: "CONTA REMUNERADA - RESGATE REMUNERACAO", direction: "credit", nature: "income", origin: "yield" },
+    { contains: "", operationType: "RENDIMENTO_APLIC_FINANCEIRA", direction: "credit", nature: "income", origin: "yield" },
     { contains: "COMPRA DE TESOURO", direction: "debit", nature: "investment" },
     { contains: "COMPRA - CDB", direction: "debit", nature: "investment" },
     { contains: "EMISSAO - CDB", direction: "debit", nature: "investment" },

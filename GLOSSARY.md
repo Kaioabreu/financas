@@ -104,7 +104,7 @@ Dinheiro novo que entra para o usuário vindo de fora dele. Toda receita tem uma
 _Código_: `Income`
 
 **Salário**:
-Origem de receita que reúne o pagamento do trabalho do usuário, incluindo PLR e bônus.
+Origem de receita que reúne o pagamento do trabalho do usuário, incluindo PLR e bônus. O app a reconhece pela entrada de transferência (Pix, TED, DOC ou transferência na mesma instituição) cujo pagador é o CNPJ do empregador, lido do `/identity` (`financialRelationships.paychecksBankLink`, ou `companiesCnpj` e `qualifications.companyCnpj` quando não há vínculo de folha), por `FOLHA_PAGAMENTO` ou pela categoria Salary. Se o `/identity` não traz nenhum CNPJ, a entrada cai em outras receitas e o usuário a marca com uma regra própria ou à mão.
 _Código_: `Salary`
 
 **Rendimento**:
