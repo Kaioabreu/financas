@@ -2,6 +2,7 @@
 // Identity and the embedded configuration. It is recomputed on every read and never stored,
 // so an OTA update of the built-in rules reclassifies everything without reading Pluggy again.
 // Precedence: manual edit > user rule > built-in rule > deduction > Pluggy's category > Outros.
+import { cached } from "./dataVersion";
 import { eq, inArray } from "drizzle-orm";
 import { account, appMeta, bankTransaction, identity, installmentEdit, manualEdit, userRule } from "../db/schema";
 import { buildInstallmentPlan, type InstallmentPlan } from "./installments";
@@ -441,6 +442,19 @@ export function createClassification(deps: ClassificationDeps) {
 
     /** The classification of the given transactions, computed from what is stored right now. */
     async classify(ids: string[]): Promise<Map<string, ClassifiedAs>> {
+      // The whole table is classified once per change of the data; each screen takes its slice.
+      const all = await cached(db, "classifyAll", classifyAll);
+      const out = new Map<string, ClassifiedAs>();
+      for (const id of ids) {
+        const c = all.get(id);
+        if (c) out.set(id, c);
+      }
+      return out;
+    },
+  };
+
+  async function classifyAll(): Promise<Map<string, ClassifiedAs>> {
+    {
       const rows = await loadRows();
       const status = await cpfStatus();
       const ctx: Context = {
@@ -464,9 +478,8 @@ export function createClassification(deps: ClassificationDeps) {
           ]),
         ),
       };
-      const wanted = new Set(ids);
       ctx.rows = new Map(rows.map((r) => [r.id, r]));
-      return new Map(rows.filter((r) => wanted.has(r.id)).map((r) => [r.id, classifyRow(r, ctx)]));
-    },
-  };
+      return new Map(rows.map((r) => [r.id, classifyRow(r, ctx)]));
+    }
+  }
 }

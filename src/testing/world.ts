@@ -139,5 +139,5 @@ export async function createTestWorld(options: { config?: Partial<EmbeddedConfig
       restoreFile,
       network: async () => network.value,
     });
-  return { core: build(), dumpMeta: async () => sqlite.prepare("select * from app_meta").all(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>, restoreFile?: BackupFilePort) => build(config, restoreFile), fetch: fake, clock, secret, network };
+  return { db, core: build(), dumpMeta: async () => sqlite.prepare("select * from app_meta").all(), /** A fresh core over the same database, as after an app restart. */ restart: (config?: Partial<EmbeddedConfig>, restoreFile?: BackupFilePort) => build(config, restoreFile), fetch: fake, clock, secret, network };
 }

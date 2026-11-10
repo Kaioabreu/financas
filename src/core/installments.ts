@@ -3,6 +3,7 @@
 // to, and the BTG embedded cases: a Parcela adiantada counts on the day of its discount and a
 // Parcela cancelada on the day of the refund. A pure function of what is stored, recomputed on
 // every read, so nothing here is saved and a late credit simply moves the parcel.
+import { cached } from "./dataVersion";
 import { account, bankTransaction } from "../db/schema";
 import type { CoreDatabase } from "./createCore";
 
@@ -83,7 +84,11 @@ function metadata(extra: string | null): any {
   }
 }
 
-export async function buildInstallmentPlan(db: CoreDatabase): Promise<InstallmentPlan> {
+export function buildInstallmentPlan(db: CoreDatabase): Promise<InstallmentPlan> {
+  return cached(db, "installmentPlan", () => computeInstallmentPlan(db));
+}
+
+async function computeInstallmentPlan(db: CoreDatabase): Promise<InstallmentPlan> {
   const cards = new Set((await db.select().from(account)).filter((a) => a.type === "CREDIT").map((a) => a.id));
   const rows = (await db.select().from(bankTransaction)).filter((t) => cards.has(t.accountId));
 

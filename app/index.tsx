@@ -2,6 +2,7 @@ import { Redirect, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import type { ConnectionSummary } from "../src/core/connections";
+import { useLiveData } from "../src/shell/useLiveData";
 import { useCore } from "../src/shell/appCore";
 import { Body, Button, Fine, font, Screen, usePalette } from "../src/shell/theme";
 
@@ -21,11 +22,13 @@ export default function Entry() {
   useEffect(() => {
     if (!saved) return;
     void core.resumeReads().then(() => core.sync({ manual: false }));
-    const load = () => core.listConnections().then(setConnections);
-    void load();
-    const timer = setInterval(load, 2000);
-    return () => clearInterval(timer);
   }, [core, saved]);
+
+  useLiveData(async (alive) => {
+    if (!saved) return;
+    const list = await core.listConnections();
+    if (alive()) setConnections(list);
+  }, [saved]);
 
   if (saved === null) return <View style={{ flex: 1, backgroundColor: c.bg }} />;
   // Leaving before saving brings the user back to the Boas-vindas, with nothing stored.

@@ -6,6 +6,7 @@ import { account, bankTransaction, bill, connection, investment, snapshot } from
 import { isExpired } from "./connections";
 import type { CoreDatabase } from "./createCore";
 import { billKnown, billPaidOn } from "./billPaid";
+import { cached } from "./dataVersion";
 import { buildInstallmentPlan } from "./installments";
 
 export type AssetClass = "cash" | "fixedIncome" | "equity" | "funds" | "other";
@@ -151,6 +152,85 @@ export function createNetWorth(deps: Deps) {
 
   const allSnapshots = () => readSnapshots(db);
 
+  async function computeNetWorth(): Promise<NetWorthView> {
+    const now = deps.clock();
+    const today = localDay(now);
+    const conns = await db.select().from(connection);
+    const snaps = await allSnapshots();
+
+    const byClass = new Map<AssetClass, number>();
+    let debt = 0;
+    const banks: NetWorthBank[] = [];
+    const estimating = conns.filter((c) => c.estimate && JSON.parse(c.estimate).state === "pending").map((c) => c.bankName);
+    for (const c of conns) {
+      const last = await db
+        .select()
+        .from(snapshot)
+        .where(and(eq(snapshot.itemId, c.itemId), lte(snapshot.date, today)))
+        .orderBy(desc(snapshot.date))
+        .limit(1);
+      const old = last[0];
+      const expired = isExpired(c.consentExpiresAt, now);
+      let lines: Line[];
+      let mayBeMissing: boolean;
+      let valueDate: string | null = null;
+      if (expired && old) {
+        lines = parse(old.payload).lines ?? [];
+        mayBeMissing = parse(old.payload).unavailable === true;
+        valueDate = old.date;
+      } else {
+        const live = await liveLines(c.itemId, today);
+        lines = live.lines;
+        mayBeMissing = live.reservedMissing || (old ? parse(old.payload).unavailable === true : false);
+        if (expired) valueDate = c.dataAt ? c.dataAt.slice(0, 10) : null;
+      }
+      for (const l of lines) {
+        if (l.cls === "debt") debt += l.value;
+        else byClass.set(l.cls, (byClass.get(l.cls) ?? 0) + l.value);
+      }
+      banks.push({ itemId: c.itemId, bankName: c.bankName, valueDate, mayBeMissing });
+    }
+
+    const assets = ASSET_CLASSES.reduce((s, k) => s + (byClass.get(k) ?? 0), 0);
+    const classes = ASSET_CLASSES.filter((k) => (byClass.get(k) ?? 0) !== 0).map((k) => ({
+      class: k,
+      value: round(byClass.get(k)!),
+      share: assets > 0 ? byClass.get(k)! / assets : 0,
+    }));
+    const total = round(assets + debt);
+
+    // The curve: the last Retrato of each month before this one, then today.
+    const thisMonth = today.slice(0, 7);
+    const totalAt = (date: string) => {
+      const latest = new Map<string, { date: string; lines: Line[]; estimated: boolean }>();
+      for (const s of snaps) {
+        if (s.date > date) continue;
+        const cur = latest.get(s.itemId);
+        if (!cur || s.date > cur.date) latest.set(s.itemId, { date: s.date, lines: s.lines ?? [], estimated: s.estimated === true });
+      }
+      let sum = 0;
+      let estimated = false;
+      for (const v of latest.values()) {
+        estimated ||= v.estimated;
+        for (const l of v.lines) sum += l.value;
+      }
+      return { total: round(sum), estimated };
+    };
+    const lastDayOfMonth = new Map<string, string>();
+    for (const s of snaps) {
+      const month = s.date.slice(0, 7);
+      if (month >= thisMonth) continue;
+      if (!lastDayOfMonth.has(month) || s.date > lastDayOfMonth.get(month)!) lastDayOfMonth.set(month, s.date);
+    }
+    const curve: CurvePoint[] = [...lastDayOfMonth]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, date]) => ({ month, date, ...totalAt(date), today: false }));
+    const previous = curve[curve.length - 1];
+    curve.push({ month: thisMonth, date: today, total, today: true, estimated: false });
+
+    return { total, variation: previous ? round(total - previous.total) : null, classes, debt: round(debt), curve, banks, estimating };
+  }
+
   return {
     /** Writes the Retrato of one Connection for today; a later one the same day replaces it. */
     async takeSnapshot(itemId: string, unavailable: boolean) {
@@ -160,83 +240,9 @@ export function createNetWorth(deps: Deps) {
       await db.insert(snapshot).values({ date, itemId, payload }).onConflictDoUpdate({ target: [snapshot.date, snapshot.itemId], set: { payload } });
     },
 
-    async netWorth(): Promise<NetWorthView> {
-      const now = deps.clock();
-      const today = localDay(now);
-      const conns = await db.select().from(connection);
-      const snaps = await allSnapshots();
-
-      const byClass = new Map<AssetClass, number>();
-      let debt = 0;
-      const banks: NetWorthBank[] = [];
-      const estimating = conns.filter((c) => c.estimate && JSON.parse(c.estimate).state === "pending").map((c) => c.bankName);
-      for (const c of conns) {
-        const last = await db
-          .select()
-          .from(snapshot)
-          .where(and(eq(snapshot.itemId, c.itemId), lte(snapshot.date, today)))
-          .orderBy(desc(snapshot.date))
-          .limit(1);
-        const old = last[0];
-        const expired = isExpired(c.consentExpiresAt, now);
-        let lines: Line[];
-        let mayBeMissing: boolean;
-        let valueDate: string | null = null;
-        if (expired && old) {
-          lines = parse(old.payload).lines ?? [];
-          mayBeMissing = parse(old.payload).unavailable === true;
-          valueDate = old.date;
-        } else {
-          const live = await liveLines(c.itemId, today);
-          lines = live.lines;
-          mayBeMissing = live.reservedMissing || (old ? parse(old.payload).unavailable === true : false);
-          if (expired) valueDate = c.dataAt ? c.dataAt.slice(0, 10) : null;
-        }
-        for (const l of lines) {
-          if (l.cls === "debt") debt += l.value;
-          else byClass.set(l.cls, (byClass.get(l.cls) ?? 0) + l.value);
-        }
-        banks.push({ itemId: c.itemId, bankName: c.bankName, valueDate, mayBeMissing });
-      }
-
-      const assets = ASSET_CLASSES.reduce((s, k) => s + (byClass.get(k) ?? 0), 0);
-      const classes = ASSET_CLASSES.filter((k) => (byClass.get(k) ?? 0) !== 0).map((k) => ({
-        class: k,
-        value: round(byClass.get(k)!),
-        share: assets > 0 ? byClass.get(k)! / assets : 0,
-      }));
-      const total = round(assets + debt);
-
-      // The curve: the last Retrato of each month before this one, then today.
-      const thisMonth = today.slice(0, 7);
-      const totalAt = (date: string) => {
-        const latest = new Map<string, { date: string; lines: Line[]; estimated: boolean }>();
-        for (const s of snaps) {
-          if (s.date > date) continue;
-          const cur = latest.get(s.itemId);
-          if (!cur || s.date > cur.date) latest.set(s.itemId, { date: s.date, lines: s.lines ?? [], estimated: s.estimated === true });
-        }
-        let sum = 0;
-        let estimated = false;
-        for (const v of latest.values()) {
-          estimated ||= v.estimated;
-          for (const l of v.lines) sum += l.value;
-        }
-        return { total: round(sum), estimated };
-      };
-      const lastDayOfMonth = new Map<string, string>();
-      for (const s of snaps) {
-        const month = s.date.slice(0, 7);
-        if (month >= thisMonth) continue;
-        if (!lastDayOfMonth.has(month) || s.date > lastDayOfMonth.get(month)!) lastDayOfMonth.set(month, s.date);
-      }
-      const curve: CurvePoint[] = [...lastDayOfMonth]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, date]) => ({ month, date, ...totalAt(date), today: false }));
-      const previous = curve[curve.length - 1];
-      curve.push({ month: thisMonth, date: today, total, today: true, estimated: false });
-
-      return { total, variation: previous ? round(total - previous.total) : null, classes, debt: round(debt), curve, banks, estimating };
+    netWorth(): Promise<NetWorthView> {
+      // Time matters (a Conexão expires), so the result lives for one minute of the clock at most.
+      return cached(db, `netWorth:${Math.floor(deps.clock() / 60_000)}`, computeNetWorth);
     },
   };
 }

@@ -4,6 +4,7 @@ import { eq, like } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import type { EmbeddedConfig } from "./config";
 import { account, appMeta, bankTransaction, bill, connection, identity, investment, investmentTransaction, snapshot } from "../db/schema";
+import { onDataChange, trackWrites } from "./dataVersion";
 import { createClassification, type ClassificationApi } from "./classification";
 import { createConnections, type ConnectionsApi } from "./connections";
 import { createSync, type SyncApi } from "./sync";
@@ -75,6 +76,8 @@ export type CredentialsStatus = { saved: false } | { saved: true; clientId: stri
 export type Appearance = "system" | "light" | "dark";
 
 export interface Core extends ConnectionsApi, SyncApi, ClassificationApi, SummaryApi, NetWorthApi, BillsApi, PerformanceApi {
+  /** Calls the listener (debounced) after the stored data changes; screens reload then instead of polling. */
+  onDataChange(listener: () => void): () => void;
   /** The "Copiar diagnóstico" text: only allow-listed facts, never amounts, names or ids. */
   diagnostic(): Promise<string>;
   credentialsStatus(): Promise<CredentialsStatus>;
@@ -134,7 +137,9 @@ export const BACKUP_MIN_PASSWORD = 8;
 const LOCK_KEY = "lock.enabled";
 
 export function createCore(deps: CoreDeps): Core {
-  const { db, config } = deps;
+  const { config } = deps;
+  // Every write goes through the tracked handle, so derived views are cached per change of data.
+  const db = trackWrites(deps.db);
   let apiKey: { value: string; expiresAt: number } | null = null;
   const diagnostics = createDiagnostics({
     db,
@@ -267,6 +272,7 @@ export function createCore(deps: CoreDeps): Core {
   });
 
   return {
+    onDataChange: (listener) => onDataChange(db, listener),
     lock,
     fundQuotasPrompt: estimate.fundQuotasPrompt,
     async answerFundQuotas(choice) {
