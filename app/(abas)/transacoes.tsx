@@ -1,22 +1,24 @@
 import { useState } from "react";
-import { FlatList, Linking, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Linking, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BillGap } from "../../src/core/bills";
 import { embeddedConfig } from "../../src/core/config";
 import type { AccountSummary, ConnectionSummary, TransactionRow } from "../../src/core/connections";
 import { useLiveData } from "../../src/shell/useLiveData";
 import { useCore } from "../../src/shell/appCore";
-import { MonthBar } from "../../src/shell/MonthBar";
-import { SourceChips } from "../../src/shell/SourceChips";
-import { sourceLabel } from "../../src/shell/sourceLabel";
+import { PrototypeSwitcher } from "../../src/shell/proto/PrototypeSwitcher";
+import { getVariant, setVariant } from "../../src/shell/proto/shared";
+import { VariantA } from "../../src/shell/proto/VariantA";
+import { VariantB } from "../../src/shell/proto/VariantB";
+import { VariantC } from "../../src/shell/proto/VariantC";
 import { useMonth } from "../../src/shell/month";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { AppCategory, CpfStatus } from "../../src/core/classification";
-import { categoryLabel, natureLabel, originLabel } from "../../src/shell/labels";
-import { Body, Fine, font, LinkText, usePalette } from "../../src/shell/theme";
+import { Fine, LinkText, usePalette } from "../../src/shell/theme";
 import { EditSheet } from "../../src/shell/EditSheet";
 
-const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+// PROTOTYPE (prototype/transacoes-linhas): three list layouts switched by a floating pill.
+const NAMES = ["Dia a dia", "Cartões com ícone", "Extrato minimalista"];
 
 export default function Transacoes() {
   const core = useCore();
@@ -28,7 +30,7 @@ export default function Transacoes() {
   const days = params.from && params.to ? { from: Number(params.from), to: Number(params.to) } : undefined;
   const filtered = Boolean(category || days);
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [variant, setVariantState] = useState(getVariant());
   const [rows, setRows] = useState<TransactionRow[]>([]);
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,6 +50,8 @@ export default function Transacoes() {
     }
   };
 
+  const fetchRows = () => core.listTransactions({ month, category, days, accountIds: sources });
+
   // The tab fills in as the first read advances: it reloads when the stored data changes.
   useLiveData(async (alive) => {
     const list = await core.listAccounts();
@@ -55,127 +59,64 @@ export default function Transacoes() {
     setAccounts(list);
     setConnections(await core.listConnections());
     setCpf(await core.cpfStatus());
-    const card = list.find((a) => a.id === (selected ?? list[0]?.id));
-    const gapsFound = card?.kind === "card" && !filtered ? await core.billGaps({ month, accountId: card.id }) : [];
+    const only = sources.length === 1 ? list.find((a) => a.id === sources[0]) : undefined;
+    const gapsFound = only?.kind === "card" && !filtered ? await core.billGaps({ month, accountId: only.id }) : [];
     if (alive()) setGaps(gapsFound);
-    const id = selected ?? list[0]?.id ?? null;
-    if (id !== selected) setSelected(id);
-    // Coming from Gastos, the list covers every account and only what that slice summed.
-    if (filtered) {
-      const found = await core.listTransactions({ month, category, days, accountIds: sources });
-      if (alive()) setRows(found);
-    } else if (id) {
-      const found = await core.listTransactions({ accountId: id, month });
-      if (alive()) setRows(found);
-    }
-  }, [month, selected, filtered, category, days?.from, days?.to, sources]);
+    const found = await fetchRows();
+    if (alive()) setRows(found);
+  }, [month, filtered, category, days?.from, days?.to, sources]);
 
-  const dataAt = accounts.find((a) => a.id === selected)?.dataFrom ?? null;
+  const dataAt = accounts.find((a) => sources.includes(a.id))?.dataFrom ?? null;
+  const common = {
+    rows,
+    accounts,
+    sources,
+    toggleSource,
+    category,
+    days,
+    clearFilter: () => router.setParams({ category: undefined, from: undefined, to: undefined }),
+    onEdit: setEditing,
+    onRules: () => router.push("/regras"),
+    refreshControl: <RefreshControl refreshing={refreshing} onRefresh={refresh} />,
+    emptyText: accounts.length ? "Nenhuma transação neste mês." : "Lendo os dados do banco…",
+    bottomPad: 80,
+    banners: (
+      <>
+        {gaps.map((g) => (
+          <View key={g.billId} style={{ paddingHorizontal: 24, marginTop: 8 }}>
+            <Fine>
+              {g.text} ·{" "}
+              <LinkText onPress={() => Linking.openURL(`${embeddedConfig.guideUrl}#faltam-compras-numa-fatura`)}>Saiba mais</LinkText>
+            </Fine>
+          </View>
+        ))}
+        {dataAt ? <View style={{ paddingHorizontal: 24, marginTop: 8 }}><Fine>Dados de {dataAt}</Fine></View> : null}
+        {notice ? <View style={{ paddingHorizontal: 24, marginTop: 4 }}><Fine>{notice}</Fine></View> : null}
+        {cpf?.state === "needed" && accounts.length ? (
+          <View style={{ paddingHorizontal: 24, marginTop: 4 }}>
+            <LinkText onPress={() => router.push("/cpf")}>Informe o seu CPF para reconhecer as transferências entre as suas contas</LinkText>
+          </View>
+        ) : null}
+      </>
+    ),
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 16 }}>
-      <MonthBar />
-      <View style={{ alignItems: "center", marginTop: 2 }}>
-        <LinkText onPress={() => router.push("/regras")}>Regras</LinkText>
-      </View>
-      {filtered ? (
-        <View style={{ marginTop: 16 }}>
-          <SourceChips accounts={accounts} selected={sources} onToggle={toggleSource} />
-        </View>
-      ) : null}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0, marginTop: 16, display: filtered ? "none" : "flex" }}
-        contentContainerStyle={{ paddingHorizontal: 24, gap: 20 }}
-      >
-        {accounts.map((a) => (
-          <Pressable key={a.id} onPress={() => setSelected(a.id)} hitSlop={8}>
-            <Text
-              style={{
-                fontFamily: a.id === selected ? font.semibold : font.regular,
-                color: a.id === selected ? c.ink : c.ink2,
-                fontSize: 15.5,
-                textDecorationLine: a.id === selected ? "underline" : "none",
-              }}
-            >
-              {sourceLabel(a)}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-      {filtered ? (
-        <View style={{ paddingHorizontal: 24, marginTop: 12, flexDirection: "row" }}>
-          <Pressable
-            onPress={() => router.setParams({ category: undefined, from: undefined, to: undefined })}
-            accessibilityLabel="Limpar filtro"
-            style={{ backgroundColor: c.track, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}
-          >
-            <Text style={{ fontFamily: font.medium, fontSize: 14, color: c.ink }}>
-              {category ? categoryLabel[category].name : `Dias ${days!.from} a ${days!.to}`} ✕
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {gaps.map((g) => (
-        <View key={g.billId} style={{ paddingHorizontal: 24, marginTop: 8 }}>
-          <Fine>
-            {g.text} ·{" "}
-            <LinkText onPress={() => Linking.openURL(`${embeddedConfig.guideUrl}#faltam-compras-numa-fatura`)}>Saiba mais</LinkText>
-          </Fine>
-        </View>
-      ))}
-      {dataAt ? <View style={{ paddingHorizontal: 24, marginTop: 8 }}><Fine>Dados de {dataAt}</Fine></View> : null}
-      {notice ? <View style={{ paddingHorizontal: 24, marginTop: 4 }}><Fine>{notice}</Fine></View> : null}
-      {cpf?.state === "needed" && accounts.length ? (
-        <View style={{ paddingHorizontal: 24, marginTop: 4 }}>
-          <LinkText onPress={() => router.push("/cpf")}>Informe o seu CPF para reconhecer as transferências entre as suas contas</LinkText>
-        </View>
-      ) : null}
-      <FlatList
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-        style={{ marginTop: 12 }}
-        data={rows}
-        keyExtractor={(r) => r.id}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
-        ListEmptyComponent={
-          <Body style={{ color: c.ink2, marginTop: 12 }}>
-            {accounts.length ? "Nenhuma transação neste mês." : "Lendo os dados do banco…"}
-          </Body>
-        }
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => setEditing(item)}
-            accessibilityRole="button"
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              gap: 12,
-              paddingVertical: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: c.rule,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Body>{item.description}</Body>
-              <Fine>
-                {item.date.split("-").reverse().join("/")}
-                {item.installment ? ` · ${item.installment.number} de ${item.installment.total}` : ""} · {natureLabel[item.nature]}
-                {item.category ? ` · ${categoryLabel[item.category].icon} ${categoryLabel[item.category].name}` : ""}
-                {item.origin ? ` · ${originLabel[item.origin]}` : ""}
-              </Fine>
-            </View>
-            <Text style={{ fontFamily: font.medium, fontSize: 16, color: item.amount < 0 ? c.ink : c.acc }}>
-              {brl.format(item.amount)}
-            </Text>
-          </Pressable>
-        )}
+    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 8 }}>
+      {variant === 0 ? <VariantA {...common} /> : variant === 1 ? <VariantB {...common} /> : <VariantC {...common} />}
+      <PrototypeSwitcher
+        names={NAMES}
+        index={variant}
+        onChange={(i) => {
+          setVariant(i);
+          setVariantState(i);
+        }}
       />
       <EditSheet
         row={editing}
         onClose={() => {
           setEditing(null);
-          if (!filtered) void core.listTransactions({ accountId: selected ?? "", month }).then(setRows);
+          void fetchRows().then(setRows);
         }}
       />
     </View>
