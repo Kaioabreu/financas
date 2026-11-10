@@ -87,11 +87,36 @@ describe("Classificação: sem sinal", () => {
   it("a categoria do Pluggy mapeada vale para o gasto, e a desconhecida cai em Outros", async () => {
     const w = await world();
     const rows = await w.read([
-      bankTx({ description: "FEIRA", amount: -30, category: "Groceries" }),
-      bankTx({ description: "ESQUISITO", amount: -30, category: "Coisa Nova" }),
+      bankTx({ description: "FEIRA", amount: -30, category: "Groceries", categoryId: "10000000" }),
+      bankTx({ description: "ESQUISITO", amount: -30, category: "Coisa Nova", categoryId: null }),
     ]);
     expect(rows.FEIRA).toMatchObject({ nature: "expense", category: "groceries" });
     expect(rows.ESQUISITO).toMatchObject({ nature: "expense", category: "other" });
+  });
+
+  it("o categoryId do Pluggy decide a categoria, mesmo que o nome seja desconhecido; sem id, vale o nome", async () => {
+    const w = await world();
+    const rows = await w.read([
+      bankTx({ description: "CORRIDA", amount: -30, category: "Taxi and ride-hailing", categoryId: "19010000" }),
+      bankTx({ description: "NOME NOVO", amount: -30, category: "Nome Novo", categoryId: "19990000" }),
+      bankTx({ description: "SEM ID", amount: -30, category: "Eating out", categoryId: null }),
+      bankTx({ description: "VOO", amount: -30, category: "Airport and airlines", categoryId: "12010000" }),
+    ]);
+    expect(rows.CORRIDA).toMatchObject({ nature: "expense", category: "transport" });
+    expect(rows["NOME NOVO"]).toMatchObject({ nature: "expense", category: "transport" });
+    expect(rows["SEM ID"]).toMatchObject({ nature: "expense", category: "food" });
+    expect(rows.VOO).toMatchObject({ nature: "expense", category: "travel" });
+  });
+
+  it("a regra do usuário e a embutida vencem a categoria do Pluggy mapeada", async () => {
+    const w = await world();
+    await w.core.addRule({ contains: "CORRIDA", nature: "expense", category: "leisure" });
+    const rows = await w.read([
+      bankTx({ description: "CORRIDA", amount: -30, category: "Taxi and ride-hailing", categoryId: "19010000" }),
+      bankTx({ description: "IOF DE COMPRA INTERNACIONAL", amount: -3, category: "Taxi and ride-hailing", categoryId: "19010000" }),
+    ]);
+    expect(rows.CORRIDA).toMatchObject({ category: "leisure" });
+    expect(rows["IOF DE COMPRA INTERNACIONAL"]).toMatchObject({ category: "fees-taxes" });
   });
 
   it("empréstimo pessoal nunca é deduzido", async () => {
@@ -234,7 +259,7 @@ describe("Classificação: reembolso", () => {
       [],
       [
         cardTx({ description: "ESTORNO LOJA", type: "CREDIT", amount: -40, operationType: "ESTORNO", category: "Shopping" }),
-        cardTx({ description: "CASHBACK", type: "CREDIT", amount: -2, operationType: "CASHBACK", category: null }),
+        cardTx({ description: "CASHBACK", type: "CREDIT", amount: -2, operationType: "CASHBACK", category: null, categoryId: null }),
       ],
     );
     expect(rows["ESTORNO LOJA"]).toMatchObject({ nature: "refund", category: "shopping" });

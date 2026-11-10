@@ -6,6 +6,7 @@ import { cached } from "./dataVersion";
 import { eq, inArray } from "drizzle-orm";
 import { account, appMeta, bankTransaction, identity, installmentEdit, manualEdit, userRule } from "../db/schema";
 import { buildInstallmentPlan, type InstallmentPlan } from "./installments";
+import { mapPluggyCategory } from "./categoryMap";
 import type { BuiltInRule, EmbeddedConfig } from "./config";
 import type { CoreDatabase } from "./createCore";
 
@@ -110,6 +111,7 @@ interface Row {
   amount: number;
   type: string | null;
   category: string | null;
+  categoryId: string | null;
   operationType: string | null;
   payerDoc: string;
   receiverDoc: string;
@@ -148,7 +150,7 @@ function builtInMatch(r: Row, config: EmbeddedConfig): Classification | null {
 }
 
 function mappedCategory(r: Row, config: EmbeddedConfig): AppCategory | undefined {
-  return r.category ? config.categoryMap[normalizeText(r.category)] : undefined;
+  return mapPluggyCategory(config, r.category, r.categoryId);
 }
 
 function isBillPaymentSignal(r: Row): boolean {
@@ -315,6 +317,7 @@ export function createClassification(deps: ClassificationDeps) {
         amount: t.amountInAccountCurrency ?? t.amount,
         type: t.type,
         category: t.category,
+        categoryId: t.categoryId,
         operationType: t.operationType,
         payerDoc,
         receiverDoc,
