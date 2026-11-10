@@ -13,6 +13,11 @@ export interface BuiltInRule {
   category?: AppCategory;
   origin?: IncomeOrigin;
 }
+/** A known merchant: a raw name that starts with `contains` (accents and case ignored) shows as `name`. */
+export interface MerchantAlias {
+  contains: string;
+  name: string;
+}
 export interface EmbeddedConfig {
   pluggyBaseUrl: string;
   /** Pluggy apiKey lifetime (2 h). */
@@ -55,6 +60,8 @@ export interface EmbeddedConfig {
   gapBanks: string[];
   /** Fallback only: a bill closes this many days before its due date when Pluggy sends no billClosingDate. */
   billClosingDaysBeforeDue: number;
+  /** Known merchants and their short names for the Transações list (OTA-updatable). The first match wins. */
+  merchantAliases: MerchantAlias[];
 }
 
 export const embeddedConfig: EmbeddedConfig = {
@@ -307,4 +314,42 @@ export const embeddedConfig: EmbeddedConfig = {
   // A bank stays here only while its bills reconcile on real data.
   gapBanks: ["Mercado Pago", "Nubank"],
   billClosingDaysBeforeDue: 7,
+  merchantAliases: [
+    { contains: "mercadolivre", name: "Mercado Livre" },
+    { contains: "mercado livre", name: "Mercado Livre" },
+    { contains: "mercadopago", name: "Mercado Pago" },
+    { contains: "amazon", name: "Amazon" },
+    { contains: "amzn", name: "Amazon" },
+    { contains: "uber", name: "Uber" },
+    { contains: "airbnb", name: "Airbnb" },
+    { contains: "steam", name: "Steam" },
+    { contains: "ifood", name: "iFood" },
+    { contains: "99", name: "99" },
+    { contains: "latam", name: "Latam" },
+    { contains: "netflix", name: "Netflix" },
+    { contains: "spotify", name: "Spotify" },
+    { contains: "metro rj", name: "Metrô Rio" },
+    { contains: "metro rio", name: "Metrô Rio" },
+    { contains: "shopee", name: "Shopee" },
+    { contains: "magalu", name: "Magalu" },
+    { contains: "magazine luiza", name: "Magalu" },
+    { contains: "aliexpress", name: "AliExpress" },
+    { contains: "americanas", name: "Americanas" },
+    { contains: "rappi", name: "Rappi" },
+    { contains: "google", name: "Google" },
+    { contains: "apple.com", name: "Apple" },
+    { contains: "disney", name: "Disney+" },
+    { contains: "youtube", name: "YouTube" },
+    { contains: "booking", name: "Booking" },
+    { contains: "gol linhas", name: "Gol" },
+    { contains: "azul linhas", name: "Azul" },
+    { contains: "samsung", name: "Samsung" },
+    { contains: "kabum", name: "KaBuM" },
+    { contains: "drogasil", name: "Drogasil" },
+    { contains: "droga raia", name: "Droga Raia" },
+    { contains: "pao de acucar", name: "Pão de Açúcar" },
+    { contains: "carrefour", name: "Carrefour" },
+    { contains: "nintendo", name: "Nintendo" },
+    { contains: "playstation", name: "PlayStation" },
+  ],
 };
