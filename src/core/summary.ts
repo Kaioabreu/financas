@@ -41,7 +41,8 @@ export interface MonthPoint {
 }
 
 export interface SummaryApi {
-  monthSummary(month: string): Promise<MonthSummary>;
+  /** `accountIds` limits it to those accounts and cards; empty or absent = all. */
+  monthSummary(month: string, accountIds?: string[]): Promise<MonthSummary>;
   /** The `count` months ending at `month`, oldest first. */
   monthHistory(month: string, count?: number): Promise<MonthPoint[]>;
 }
@@ -55,6 +56,7 @@ interface Deps {
 interface Entry {
   /** YYYY-MM-DD. */
   date: string;
+  accountId: string;
   amount: number;
   c: Classification;
 }
@@ -84,10 +86,13 @@ export function weeksOf(month: string): { startDay: number; endDay: number }[] {
 }
 
 export function createSummary(deps: Deps): SummaryApi {
+  function todayKey(): string {
+    const now = new Date(deps.clock());
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }
   /** Everything that counts today: a date still to come only counts when it arrives. */
   function counted(): Promise<Entry[]> {
-    const now = new Date(deps.clock());
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const today = todayKey();
     return cached(deps.db, `counted:${today}`, () => computeCounted(today));
   }
   async function computeCounted(today: string): Promise<Entry[]> {
@@ -98,6 +103,7 @@ export function createSummary(deps: Deps): SummaryApi {
     const classes = await deps.classify(rows.map((r) => r.id));
     return rows.map((r) => ({
       date: r.date.slice(0, 10),
+      accountId: r.accountId,
       amount: Math.abs(r.amountInAccountCurrency ?? r.amount),
       c: classes.get(r.id)!,
     }));
@@ -162,8 +168,13 @@ export function createSummary(deps: Deps): SummaryApi {
   }
 
   return {
-    async monthSummary(month) {
-      return summarize(month, await counted());
+    async monthSummary(month, accountIds) {
+      const ids = [...new Set(accountIds ?? [])].sort();
+      // The account filter is part of the cache key: each choice is computed once per data version.
+      return cached(deps.db, `summary:${todayKey()}:${month}:${ids.join(",")}`, async () => {
+        const entries = await counted();
+        return summarize(month, ids.length ? entries.filter((e) => ids.includes(e.accountId)) : entries);
+      });
     },
     async monthHistory(month, count = 6) {
       const entries = await counted();

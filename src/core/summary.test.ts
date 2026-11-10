@@ -195,3 +195,34 @@ describe("Transações filtradas", () => {
     expect(rows.map((r) => r.amount)).toEqual([-20]);
   });
 });
+
+describe("Gastos: filtrar pela origem (conta ou cartão)", () => {
+  const sample = () =>
+    world(
+      [bankTx({ amount: -10, category: "Groceries", date: day("2026-10-05") }), bankTx({ amount: -99, category: "Travel", date: day("2026-10-20") })],
+      [cardTx({ amount: 20, category: "Groceries", date: day("2026-10-06") })],
+    );
+
+  it("só soma as contas escolhidas: total, categorias e semanas", async () => {
+    const w = await sample();
+    const card = await w.core.monthSummary("2026-10", [CARD]);
+    expect(card.expenses).toBe(20);
+    expect(card.categories).toEqual([{ category: "groceries", amount: 20 }]);
+    expect(card.weeks.reduce((s, x) => s + x.total, 0)).toBe(20);
+    const bank = await w.core.monthSummary("2026-10", [BANK]);
+    expect(bank.expenses).toBe(109);
+  });
+
+  it("duas contas somam as duas; nenhuma (ou lista vazia) = todas", async () => {
+    const w = await sample();
+    expect((await w.core.monthSummary("2026-10", [BANK, CARD])).expenses).toBe(129);
+    expect((await w.core.monthSummary("2026-10", [])).expenses).toBe(129);
+    expect((await w.core.monthSummary("2026-10")).expenses).toBe(129);
+  });
+
+  it("o total filtrado bate com a soma da lista filtrada de Transações", async () => {
+    const w = await sample();
+    const rows = await w.core.listTransactions({ month: "2026-10", accountIds: [CARD], category: "groceries" });
+    expect(rows.map((r) => Math.abs(r.amount))).toEqual([20]);
+  });
+});
