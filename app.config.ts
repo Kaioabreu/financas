@@ -18,7 +18,7 @@ const config: ExpoConfig = {
     // expo-secure-store needs no extra backup rules while this stays false.
     allowBackup: false,
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
+      backgroundColor: "#0B1630",
       foregroundImage: "./assets/android-icon-foreground.png",
       backgroundImage: "./assets/android-icon-background.png",
       monochromeImage: "./assets/android-icon-monochrome.png",
