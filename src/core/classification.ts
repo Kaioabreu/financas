@@ -166,7 +166,10 @@ function classifyRow(r: Row, ctx: Context): ClassifiedAs {
   const groupEdit = entry?.installment ? ctx.groupEdits.get(entry.installment.groupKey) : undefined;
   if (groupEdit) return { ...groupEdit, source: "manual" };
   const base = autoClassify(r, ctx);
-  const rule = ctx.userRules.find((u) => ruleCatches(u.contains, r.description));
+  // A rule that makes a Gasto never catches a credit: money coming back is not an expense, and the
+  // text of a refund usually carries the store's name ("Canc Parcela ... Airbnb").
+  const credit = isCredit(r);
+  const rule = ctx.userRules.find((u) => ruleCatches(u.contains, r.description) && !(credit && u.nature === "expense"));
   if (!rule) return entry?.creditOf ? settlementOf(base, entry.creditOf, ctx) : base;
   const nature = rule.nature ?? base.nature;
   const out: ClassifiedAs = { nature, source: "rule" };

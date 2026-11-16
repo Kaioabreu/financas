@@ -66,6 +66,20 @@ const storeOf = (text: string) =>
     .trim();
 const cents = (v: number) => Math.round(Math.abs(v) * 100);
 
+/**
+ * Whether the store written in a settling credit is the parcel's store. BTG appends a purchase code to
+ * it ("Airbnb  Hm4fse84bw", "Sem Juros - Airbnb * Hm344xmzrdsao Paulobra"), so the credit's text may
+ * continue after the store, but only with a code (a word that has a digit), never with another name.
+ */
+function sameStore(creditStore: string, store: string): boolean {
+  const text = storeOf(creditStore).replace(/^sem juros\s*-?\s*/, "");
+  if (text === store) return true;
+  if (!text.startsWith(store)) return false;
+  const rest = text.slice(store.length);
+  if (!/^[\s*-]/.test(rest)) return false;
+  return /\d/.test(rest.replace(/^[\s*-]+/, "").split(" ")[0] ?? "");
+}
+
 export function addMonths(isoDay: string, months: number): string {
   const [y, m, d] = isoDay.split("-").map(Number) as [number, number, number];
   const first = new Date(Date.UTC(y, m - 1 + months, 1));
@@ -160,7 +174,7 @@ async function computeInstallmentPlan(db: CoreDatabase): Promise<InstallmentPlan
     if (!m) continue;
     const [, n, total, store] = m;
     const target = parcels
-      .filter((p) => p.accountId === c.accountId && p.number === Number(n) && p.total === Number(total) && p.store === storeOf(store!) && !moved.has(p.id))
+      .filter((p) => p.accountId === c.accountId && p.number === Number(n) && p.total === Number(total) && sameStore(store!, p.store) && !moved.has(p.id))
       .sort((a, b) => a.purchase.localeCompare(b.purchase))[0];
     if (!target) continue;
     moved.set(target.id, { date: c.date, billId: c.billId, credit: c });
@@ -176,7 +190,7 @@ async function computeInstallmentPlan(db: CoreDatabase): Promise<InstallmentPlan
     const matching = sorted.filter((c) => {
       if (claimed.has(c.id) || c.accountId !== sample.accountId) return false;
       const m = /^canc parcela\s*-?\s*(.*)$/.exec(c.text);
-      return m !== null && storeOf(m[1]!) === sample.store && within(c.amount, value);
+      return m !== null && sameStore(m[1]!, sample.store) && within(c.amount, value);
     });
     if (matching.length === 0) continue;
     const limit = matching[0]!.date;
@@ -188,6 +202,15 @@ async function computeInstallmentPlan(db: CoreDatabase): Promise<InstallmentPlan
       creditOf.set(c.id, groupKey);
       claimed.add(c.id);
     });
+    // Cancelled on the day it was made: the credit left over refunds the parcel already posted that day.
+    const refunded = new Set<string>();
+    for (const c of matching.slice(future.length)) {
+      const posted = members.find((p) => !moved.has(p.id) && !refunded.has(p.id) && p.date === c.date && within(c.amount, p.cents));
+      if (!posted) continue;
+      refunded.add(posted.id);
+      creditOf.set(c.id, groupKey);
+      claimed.add(c.id);
+    }
   }
 
   const byId = new Map<string, PlanEntry>();
