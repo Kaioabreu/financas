@@ -233,3 +233,75 @@ describe("Parcelas na dívida do Patrimônio", () => {
     expect((await w.core.netWorth()).debt).toBe(0);
   });
 });
+
+describe("Parcelas do BTG com código no texto do crédito", () => {
+  const six = (amount: number, purchase: string) =>
+    Array.from({ length: 6 }, (_, i) => parcel(i + 1, 6, { purchase, amount, store: "LOJA Z" }));
+
+  it("o desconto 'Desconto Na Parcela N De M LOJA Z Hm4fse84bw' adianta a parcela N", async () => {
+    const adv = "Desconto Na Parcela 3 De 6 LOJA Z  Hm4fse84bw";
+    const w = await world([...six(100, "2026-09-14"), credit(adv, 1, "2026-09-30")]);
+    const third = (await w.all()).find((r) => r.installment?.number === 3)!;
+    expect(third.date).toBe("2026-09-30");
+    expect((await w.find(adv))[0]).toMatchObject({ nature: "refund", category: "shopping", date: "2026-09-30" });
+  });
+
+  it("'Canc Parcela Sem Juros - LOJA Z * Hm344xmzrdsao Paulobra' cancela as parcelas futuras", async () => {
+    const canc = "Canc Parcela Sem Juros - LOJA Z * Hm344xmzrdsao Paulobra";
+    const w = await world([
+      ...six(50, "2026-10-14"),
+      ...Array.from({ length: 6 }, () => credit(canc, 50, "2026-10-14")),
+    ]);
+    const parcels = (await w.find("LOJA Z")).sort((a, b) => a.installment!.number - b.installment!.number);
+    expect(parcels.map((r) => r.date)).toEqual(Array(6).fill("2026-10-14"));
+    expect((await w.core.monthSummary("2026-11")).expenses).toBe(0);
+  });
+
+  it("uma loja de nome parecido não é a mesma compra", async () => {
+    const adv = "Desconto Na Parcela 3 De 6 LOJA ZZ  Hm4fse84bw";
+    const w = await world([...six(100, "2026-09-14"), credit(adv, 1, "2026-09-30")]);
+    expect((await w.all()).find((r) => r.installment?.number === 3)!.date).toBe("2026-11-14");
+  });
+
+  it("compra cancelada no dia: o estorno da 1ª parcela já lançada também é reembolso da compra, e a categoria zera", async () => {
+    const canc = "Canc Parcela Sem Juros - LOJA Z * Hm344xmzrdsao Paulobra";
+    const w = await world([
+      ...six(50, "2026-10-14"),
+      ...Array.from({ length: 6 }, () => credit(canc, 50, "2026-10-14")),
+    ]);
+    const credits = await w.find(canc);
+    expect(credits).toHaveLength(6);
+    expect(credits.every((r) => r.nature === "refund" && r.category === "shopping")).toBe(true);
+    const october = await w.core.monthSummary("2026-10");
+    expect(october.categories).toEqual([]);
+    expect(october.uncategorizedRefunds).toBe(0);
+    expect(october.expenses).toBe(0);
+  });
+
+  it("um crédito a mais de outro dia não é do cancelamento", async () => {
+    const canc = "Canc Parcela Sem Juros - LOJA Z * Hm344xmzrdsao Paulobra";
+    const w = await world([
+      ...six(50, "2026-10-14"),
+      ...Array.from({ length: 5 }, () => credit(canc, 50, "2026-10-20")),
+      credit(canc, 50, "2026-10-25"),
+    ]);
+    const extra = (await w.find(canc)).filter((r) => r.date === "2026-10-25");
+    expect(extra[0]!.category).toBeUndefined();
+  });
+
+  it("uma regra 'Gasto' para a loja vale para as compras, não para os créditos que as desfazem", async () => {
+    const canc = "Canc Parcela Sem Juros - LOJA Z * Hm344xmzrdsao Paulobra";
+    const w = await world([
+      ...six(50, "2026-10-14"),
+      ...Array.from({ length: 6 }, () => credit(canc, 50, "2026-10-14")),
+    ]);
+    await w.core.addRule({ contains: "loja z", nature: "expense", category: "travel" });
+    const parcels = await w.find("LOJA Z");
+    expect(parcels.every((r) => r.nature === "expense" && r.category === "travel")).toBe(true);
+    const credits = await w.find(canc);
+    expect(credits.every((r) => r.nature === "refund" && r.category === "travel")).toBe(true);
+    const october = await w.core.monthSummary("2026-10");
+    expect(october.categories).toEqual([]);
+    expect(october.expenses).toBe(0);
+  });
+});
