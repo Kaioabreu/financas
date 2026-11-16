@@ -144,7 +144,7 @@ export default function Transacoes() {
             );
           }
           const r = item.row;
-          const label = rowTitle(r.description, r.amount);
+          const label = rowTitle(r.description, r.amount, undefined, { nature: r.nature, origin: r.origin });
           const cat = r.category && r.category !== "other" ? r.category : undefined;
           const acc = accountById.get(r.accountId);
           const where = acc ? sourceLabel(acc) : r.accountName;
